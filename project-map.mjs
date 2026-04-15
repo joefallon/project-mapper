@@ -316,19 +316,19 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
 /**
  * Simple helper that removes a directory tree if it exists.
  */
-async function removeDirectoryIfPresent(directoryPath) {
-  await fs.rm(directoryPath, { recursive: true, force: true });
-}
+// async function removeDirectoryIfPresent(directoryPath) {
+//   await fs.rm(directoryPath, { recursive: true, force: true });
+// }
 
 /**
  * Ensures all generated-state directories exist.
  */
-async function ensureStateDirectories() {
-  await fs.mkdir(POSTINGS_DIR, { recursive: true });
-  await fs.mkdir(SYNOPSES_DIRS_DIR, { recursive: true });
-  await fs.mkdir(SYNOPSES_FILES_DIR, { recursive: true });
-  await fs.mkdir(QUERIES_DIR, { recursive: true });
-}
+// async function ensureStateDirectories() {
+//   await fs.mkdir(POSTINGS_DIR, { recursive: true });
+//   await fs.mkdir(SYNOPSES_DIRS_DIR, { recursive: true });
+//   await fs.mkdir(SYNOPSES_FILES_DIR, { recursive: true });
+//   await fs.mkdir(QUERIES_DIR, { recursive: true });
+// }
 
 /**
  * This helper ensures .ai/scale exists before build output is written.
@@ -336,9 +336,9 @@ async function ensureStateDirectories() {
  * It is intentionally permissive. If the user has not created .ai/scale yet, the
  * build can still create it.
  */
-async function ensureScaleDirectory() {
-  await fs.mkdir(SCALE_DIR, { recursive: true });
-}
+// async function ensureScaleDirectory() {
+//   await fs.mkdir(SCALE_DIR, { recursive: true });
+// }
 
 /**
  * Reads a file as a short binary sample. Used for binary/text detection.
