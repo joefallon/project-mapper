@@ -693,33 +693,33 @@ function inferBoundaryTitle(lines, startIndex) {
 /**
  * Attempts to infer a structural boundary kind.
  */
-function inferBoundaryKind(lines, startIndex) {
-  const line = lines[startIndex] ?? '';
-
-  if (MARKDOWN_HEADING_PATTERN.test(line) || HTML_HEADING_PATTERN.test(line)) {
-    return 'heading';
-  }
-
-  if (INI_SECTION_PATTERN.test(line)) {
-    return 'section';
-  }
-
-  if (DELIMITER_PATTERN.test(line)) {
-    return 'delimiter';
-  }
-
-  if (FENCE_PATTERN.test(line)) {
-    return 'fence';
-  }
-
-  for (const pattern of DECLARATION_PATTERNS) {
-    if (pattern.test(line)) {
-      return 'declaration';
-    }
-  }
-
-  return 'section';
-}
+// function inferBoundaryKind(lines, startIndex) {
+//   const line = lines[startIndex] ?? '';
+//
+//   if (MARKDOWN_HEADING_PATTERN.test(line) || HTML_HEADING_PATTERN.test(line)) {
+//     return 'heading';
+//   }
+//
+//   if (INI_SECTION_PATTERN.test(line)) {
+//     return 'section';
+//   }
+//
+//   if (DELIMITER_PATTERN.test(line)) {
+//     return 'delimiter';
+//   }
+//
+//   if (FENCE_PATTERN.test(line)) {
+//     return 'fence';
+//   }
+//
+//   for (const pattern of DECLARATION_PATTERNS) {
+//     if (pattern.test(line)) {
+//       return 'declaration';
+//     }
+//   }
+//
+//   return 'section';
+// }
 
 /**
  * Finds natural section boundaries for a file.
