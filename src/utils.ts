@@ -9,9 +9,13 @@
  *
  * Returns: boolean - true when `value` is a string and trimming it yields length > 0.
  */
+  import path from 'path';
+
 export function hasText(value: unknown): boolean {
     return typeof value === 'string' && value.trim().length > 0;
 }
+
+// ...existing code...
 
 /**
  * Truncates a string to a maximum length and appends an ellipsis when truncated.
@@ -64,6 +68,16 @@ export function normalizeWhitespace(value: string): string {
  */
 export function toPosixPath(inputPath: string): string {
     return inputPath.replace(/\\/g, '/');
+}
+
+// Convert an absolute filesystem path into a normalized project-relative path
+// using POSIX-style separators. The function accepts an optional `projectRoot`
+// (defaults to `process.cwd()`) which makes testing easier and mirrors the
+// behavior in `project-map.mjs` where the project root is the current working
+// directory.
+export function toRelativeProjectPath(absolutePath: string, projectRoot = process.cwd()): string {
+    const relative = path.relative(projectRoot, absolutePath);
+    return toPosixPath(relative || '.');
 }
 
 /**
