@@ -343,17 +343,17 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
 /**
  * Reads a file as a short binary sample. Used for binary/text detection.
  */
-async function readBinarySample(filePath, maxBytes = 4096) {
-  const handle = await fs.open(filePath, 'r');
-
-  try {
-    const buffer = Buffer.alloc(maxBytes);
-    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
-    return buffer.subarray(0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
+// async function readBinarySample(filePath, maxBytes = 4096) {
+//   const handle = await fs.open(filePath, 'r');
+//
+//   try {
+//     const buffer = Buffer.alloc(maxBytes);
+//     const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+//     return buffer.subarray(0, bytesRead);
+//   } finally {
+//     await handle.close();
+//   }
+// }
 
 /**
  * Returns true when a relative path is under a specifically ignored relative
