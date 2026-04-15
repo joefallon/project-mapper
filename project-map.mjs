@@ -209,10 +209,10 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
 /**
  * Helper that returns a normalized relative path from the project root.
  */
-function toRelativeProjectPath(absolutePath) {
-  const relative = path.relative(PROJECT_ROOT, absolutePath);
-  return toPosixPath(relative || '.');
-}
+// function toRelativeProjectPath(absolutePath) {
+//   const relative = path.relative(PROJECT_ROOT, absolutePath);
+//   return toPosixPath(relative || '.');
+// }
 
 /**
  * Helper that checks whether a string is non-empty after trimming.
@@ -270,48 +270,48 @@ function toRelativeProjectPath(absolutePath) {
  *
  * This keeps persisted JSON output tidy and human-readable.
  */
-function prettyJson(value) {
-  return JSON.stringify(value, null, 2);
-}
+// function prettyJson(value) {
+//   return JSON.stringify(value, null, 2);
+// }
 
 /**
  * Minimal helper for writing JSON files.
  */
-async function writeJson(filePath, value) {
-  await fs.writeFile(filePath, `${prettyJson(value)}${os.EOL}`, 'utf8');
-}
+// async function writeJson(filePath, value) {
+//   await fs.writeFile(filePath, `${prettyJson(value)}${os.EOL}`, 'utf8');
+// }
 
 /**
  * Minimal helper for writing newline-delimited JSON.
  */
-async function writeJsonLines(filePath, records) {
-  const content = records.map((record) => JSON.stringify(record)).join('\n');
-  await fs.writeFile(filePath, content.length > 0 ? `${content}\n` : '', 'utf8');
-}
+// async function writeJsonLines(filePath, records) {
+//   const content = records.map((record) => JSON.stringify(record)).join('\n');
+//   await fs.writeFile(filePath, content.length > 0 ? `${content}\n` : '', 'utf8');
+// }
 
 /**
  * Minimal helper for reading a JSON file.
  */
-async function readJson(filePath) {
-  const text = await fs.readFile(filePath, 'utf8');
-  return JSON.parse(text);
-}
+// async function readJson(filePath) {
+//   const text = await fs.readFile(filePath, 'utf8');
+//   return JSON.parse(text);
+// }
 
 /**
  * Minimal helper for reading newline-delimited JSON.
  */
-async function readJsonLines(filePath) {
-  const text = await fs.readFile(filePath, 'utf8');
-
-  if (!text.trim()) {
-    return [];
-  }
-
-  return text
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line));
-}
+// async function readJsonLines(filePath) {
+//   const text = await fs.readFile(filePath, 'utf8');
+//
+//   if (!text.trim()) {
+//     return [];
+//   }
+//
+//   return text
+//     .split(/\r?\n/)
+//     .filter((line) => line.trim().length > 0)
+//     .map((line) => JSON.parse(line));
+// }
 
 /**
  * Simple helper that removes a directory tree if it exists.
@@ -806,46 +806,46 @@ function detectBoundaries(lines) {
 /**
  * Splits a large line range into overlapping fixed-size chunks.
  */
-function splitLargeRangeIntoWindows(lines, startLine, endLine, inheritedTitle, inheritedKind) {
-  const chunks = [];
-  const totalLines = endLine - startLine + 1;
-
-  if (totalLines <= STRUCTURE_MAX_SECTION_LINES) {
-    chunks.push({
-      startLine,
-      endLine,
-      kind: inheritedKind,
-      title: inheritedTitle,
-    });
-    return chunks;
-  }
-
-  let windowStart = startLine;
-  let partIndex = 1;
-
-  while (windowStart <= endLine) {
-    const windowEnd = Math.min(endLine, windowStart + FALLBACK_CHUNK_LINES - 1);
-    const partTitle = inheritedTitle
-      ? `${inheritedTitle} (part ${partIndex})`
-      : `window ${partIndex}`;
-
-    chunks.push({
-      startLine: windowStart,
-      endLine: windowEnd,
-      kind: inheritedKind === 'window' ? 'window' : `${inheritedKind}-part`,
-      title: partTitle,
-    });
-
-    if (windowEnd >= endLine) {
-      break;
-    }
-
-    windowStart = Math.max(windowEnd - FALLBACK_CHUNK_OVERLAP + 1, windowStart + 1);
-    partIndex += 1;
-  }
-
-  return chunks;
-}
+// function splitLargeRangeIntoWindows(lines, startLine, endLine, inheritedTitle, inheritedKind) {
+//   const chunks = [];
+//   const totalLines = endLine - startLine + 1;
+//
+//   if (totalLines <= STRUCTURE_MAX_SECTION_LINES) {
+//     chunks.push({
+//       startLine,
+//       endLine,
+//       kind: inheritedKind,
+//       title: inheritedTitle,
+//     });
+//     return chunks;
+//   }
+//
+//   let windowStart = startLine;
+//   let partIndex = 1;
+//
+//   while (windowStart <= endLine) {
+//     const windowEnd = Math.min(endLine, windowStart + FALLBACK_CHUNK_LINES - 1);
+//     const partTitle = inheritedTitle
+//       ? `${inheritedTitle} (part ${partIndex})`
+//       : `window ${partIndex}`;
+//
+//     chunks.push({
+//       startLine: windowStart,
+//       endLine: windowEnd,
+//       kind: inheritedKind === 'window' ? 'window' : `${inheritedKind}-part`,
+//       title: partTitle,
+//     });
+//
+//     if (windowEnd >= endLine) {
+//       break;
+//     }
+//
+//     windowStart = Math.max(windowEnd - FALLBACK_CHUNK_OVERLAP + 1, windowStart + 1);
+//     partIndex += 1;
+//   }
+//
+//   return chunks;
+// }
 
 /**
  * Produces chunk ranges for a file.
