@@ -14,13 +14,18 @@ import {
   buildPreviewFromLines,
   extractQuotedStrings,
   bucketForTerm,
+  toRelativeProjectPath,
 } from '../src/utils';
+import path from 'path';
 
 describe('utils', () => {
   it('hasText and truncate work', () => {
     expect(hasText('  hi ')).toBe(true);
     expect(hasText('')).toBe(false);
     expect(truncate('hello', 3)).toBe('...');
+    // truncate should return empty string for empty/whitespace-only input
+    expect(truncate('', 10)).toBe('');
+    expect(truncate('   ', 10)).toBe('');
   });
 
   it('toPosixPath converts backslashes to forward slashes', () => {
@@ -45,6 +50,8 @@ describe('utils', () => {
   it('normalizeTerm and isUsefulTerm', () => {
     expect(normalizeTerm('  Foo-Bar ')).toBe('foo-bar');
     expect(isUsefulTerm('a')).toBe(false);
+    // ensure stopword branch is covered for a term with length >= 2
+    expect(isUsefulTerm('an')).toBe(false);
     expect(isUsefulTerm('foo')).toBe(true);
     expect(isUsefulTerm('123')).toBe(false);
     // numbers of length >= 4 are allowed
@@ -88,12 +95,26 @@ describe('utils', () => {
     expect(extractQuotedStrings("He said 'hello' and \"goodbye\".")).toEqual(['hello', 'goodbye']);
     // limit parameter
     expect(extractQuotedStrings("\"one\" \"two\" \"three\"", 2)).toEqual(['one', 'two']);
+    // backtick quotes and length limits
+    const long = '`' + 'x'.repeat(200) + '`';
+    // matches because length within 120? actually 200 > 120 so should not match
+    expect(extractQuotedStrings(long)).toEqual([]);
+    // 'ok' is only two characters long and the extractor requires 3-120 chars
+    expect(extractQuotedStrings("`short` `ok` `also`", 2)).toEqual(['short', 'also']);
   });
 
   it('bucketForTerm', () => {
     expect(bucketForTerm('apple')).toBe('a');
     expect(bucketForTerm('123foo')).toBe('num');
     expect(bucketForTerm('_private')).toBe('other');
+  });
+
+  it('toRelativeProjectPath produces posix-style relative paths', () => {
+    const absolute = path.join('C:', 'proj', 'sub', 'file.txt');
+    const root = path.join('C:', 'proj');
+    const rel = toRelativeProjectPath(absolute, root);
+    // should be normalized to posix separators
+    expect(rel).toBe('sub/file.txt');
   });
 });
 

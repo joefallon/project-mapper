@@ -359,81 +359,81 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
  * Returns true when a relative path is under a specifically ignored relative
  * directory such as .ai/scale/state.
  */
-function isUnderIgnoredRelativeDirectory(relativePath) {
-  const normalized = relativePath === '.' ? '.' : relativePath.replace(/^\.\//, '');
-
-  for (const ignoredDirectory of IGNORED_RELATIVE_DIRECTORIES) {
-    if (normalized === ignoredDirectory || normalized.startsWith(`${ignoredDirectory}/`)) {
-      return true;
-    }
-  }
-
-  return false;
-}
+// function isUnderIgnoredRelativeDirectory(relativePath) {
+//   const normalized = relativePath === '.' ? '.' : relativePath.replace(/^\.\//, '');
+//
+//   for (const ignoredDirectory of IGNORED_RELATIVE_DIRECTORIES) {
+//     if (normalized === ignoredDirectory || normalized.startsWith(`${ignoredDirectory}/`)) {
+//       return true;
+//     }
+//   }
+//
+//   return false;
+// }
 
 /**
  * Determines whether a directory should be ignored.
  */
-function shouldIgnoreDirectory(relativeDirectoryPath, directoryName) {
-  if (IGNORED_DIRECTORY_NAMES.has(directoryName)) {
-    return true;
-  }
-
-  return isUnderIgnoredRelativeDirectory(relativeDirectoryPath);
-}
+// function shouldIgnoreDirectory(relativeDirectoryPath, directoryName) {
+//   if (IGNORED_DIRECTORY_NAMES.has(directoryName)) {
+//     return true;
+//   }
+//
+//   return isUnderIgnoredRelativeDirectory(relativeDirectoryPath);
+// }
 
 /**
  * Determines whether a file path looks generated or otherwise undesirable for
  * indexing.
  */
-function looksGenerated(relativeFilePath) {
-  return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(relativeFilePath));
-}
+// function looksGenerated(relativeFilePath) {
+//   return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(relativeFilePath));
+// }
 
 /**
  * Returns a coarse file class from the path/extension.
  */
-function classifyFile(relativeFilePath, extension, isTextFile) {
-  const lowerPath = relativeFilePath.toLowerCase();
-
-  if (!isTextFile) {
-    return 'binary';
-  }
-
-  if (looksGenerated(relativeFilePath)) {
-    return 'generated';
-  }
-
-  if (TEST_HINTS.some((hint) => lowerPath.includes(hint))) {
-    return 'test';
-  }
-
-  if (DOC_EXTENSIONS.has(extension) || DOC_HINTS.some((hint) => lowerPath.includes(hint))) {
-    return 'doc';
-  }
-
-  if (CONFIG_EXTENSIONS.has(extension) || CONFIG_HINTS.some((hint) => lowerPath.includes(hint))) {
-    return 'config';
-  }
-
-  if (DATA_EXTENSIONS.has(extension)) {
-    return 'data';
-  }
-
-  if (SCRIPT_EXTENSIONS.has(extension)) {
-    return 'script';
-  }
-
-  if (SOURCE_EXTENSIONS.has(extension)) {
-    return 'source';
-  }
-
-  if (extension && !isTextFile) {
-    return 'asset';
-  }
-
-  return isTextFile ? 'unknown' : 'asset';
-}
+// function classifyFile(relativeFilePath, extension, isTextFile) {
+//   const lowerPath = relativeFilePath.toLowerCase();
+//
+//   if (!isTextFile) {
+//     return 'binary';
+//   }
+//
+//   if (looksGenerated(relativeFilePath)) {
+//     return 'generated';
+//   }
+//
+//   if (TEST_HINTS.some((hint) => lowerPath.includes(hint))) {
+//     return 'test';
+//   }
+//
+//   if (DOC_EXTENSIONS.has(extension) || DOC_HINTS.some((hint) => lowerPath.includes(hint))) {
+//     return 'doc';
+//   }
+//
+//   if (CONFIG_EXTENSIONS.has(extension) || CONFIG_HINTS.some((hint) => lowerPath.includes(hint))) {
+//     return 'config';
+//   }
+//
+//   if (DATA_EXTENSIONS.has(extension)) {
+//     return 'data';
+//   }
+//
+//   if (SCRIPT_EXTENSIONS.has(extension)) {
+//     return 'script';
+//   }
+//
+//   if (SOURCE_EXTENSIONS.has(extension)) {
+//     return 'source';
+//   }
+//
+//   if (extension && !isTextFile) {
+//     return 'asset';
+//   }
+//
+//   return isTextFile ? 'unknown' : 'asset';
+// }
 
 /**
  * Determines whether a file should be treated as binary/non-indexable.

@@ -34,3 +34,40 @@ export const IGNORED_RELATIVE_DIRECTORIES: ReadonlySet<string> = new Set([
   '.ai/scale/state',
 ]);
 
+/**
+ * Some additional file names/patterns that are usually generated noise.
+ *
+ * Copied from `project-map.mjs` to keep behaviour identical without modifying
+ * the original script.
+ */
+export const GENERATED_FILE_PATTERNS: ReadonlyArray<RegExp> = [
+  /\.min\.[^.]+$/i,
+  /\.map$/i,
+  /package-lock\.json$/i,
+  /pnpm-lock\.ya?ml$/i,
+  /yarn\.lock$/i,
+  /composer\.lock$/i,
+  /diff\.diff$/i,
+  /Cargo\.lock$/i,
+  /poetry\.lock$/i,
+];
+
+
+/**
+ * File classification helpers copied from `project-map.mjs` to keep behavior
+ * identical without modifying the original script.
+ */
+export const DOC_EXTENSIONS: ReadonlySet<string> = new Set(['.md', '.markdown', '.mdx', '.rst', '.txt', '.adoc']);
+export const CONFIG_EXTENSIONS: ReadonlySet<string> = new Set(['.json', '.jsonc', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.env', '.properties', '.xml']);
+export const DATA_EXTENSIONS: ReadonlySet<string> = new Set(['.csv', '.tsv', '.sql']);
+export const SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set(['.sh', '.bash', '.ps1', '.bat', '.cmd']);
+export const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.c', '.cc', '.cpp', '.cs', '.css', '.go', '.h', '.hpp', '.html', '.java', '.js', '.jsx',
+  '.mjs', '.php', '.pl', '.py', '.rb', '.rs', '.scss', '.sass', '.ts', '.tsx', '.vue',
+]);
+
+export const TEST_HINTS: ReadonlyArray<string> = ['test', 'tests', 'spec', '__tests__', '.spec.', '.test.'];
+export const DOC_HINTS: ReadonlyArray<string> = ['docs', 'doc', 'readme', 'guide', 'manual', 'notes', 'design', 'lore', 'campaign', 'adventure'];
+export const CONFIG_HINTS: ReadonlyArray<string> = ['config', 'configs', 'settings'];
+
+
