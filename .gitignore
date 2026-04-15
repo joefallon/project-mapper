@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.ai/
+.DS_Store
+coverage/
+.env
+
