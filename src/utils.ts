@@ -320,3 +320,10 @@ export function tokenizeText(text: string): string[] {
     return output;
 }
 
+
+// Re-export selected text helpers from the text/ submodules. This keeps an
+// ergonomic single import for existing code while allowing a cleaner split of
+// responsibilities under src/text/*. Do not import project-map.mjs here.
+export { extractIdentifiers } from './text/identifiers';
+
+

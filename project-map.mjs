@@ -202,9 +202,9 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
  * Helper used to ensure all persisted relative paths are normalized with forward
  * slashes, even on Windows.
  */
-function toPosixPath(inputPath) {
-  return inputPath.split(path.sep).join('/');
-}
+// function toPosixPath(inputPath) {
+//   return inputPath.split(path.sep).join('/');
+// }
 
 /**
  * Helper that returns a normalized relative path from the project root.
@@ -217,53 +217,53 @@ function toRelativeProjectPath(absolutePath) {
 /**
  * Helper that checks whether a string is non-empty after trimming.
  */
-function hasText(value) {
-  return typeof value === 'string' && value.trim().length > 0;
-}
+// function hasText(value) {
+//   return typeof value === 'string' && value.trim().length > 0;
+// }
 
 /**
  * Helper that limits string length without throwing away the whole value.
  */
-function truncate(value, maxLength = 240) {
-  if (!hasText(value)) {
-    return '';
-  }
-
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
-}
+// function truncate(value, maxLength = 240) {
+//   if (!hasText(value)) {
+//     return '';
+//   }
+//
+//   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
+// }
 
 /**
  * Helper used to create safe filesystem names for generated query artifacts.
  */
-function safeSlug(value, fallback = 'query') {
-  const cleaned = String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-
-  return cleaned || fallback;
-}
+// function safeSlug(value, fallback = 'query') {
+//   const cleaned = String(value ?? '')
+//     .trim()
+//     .toLowerCase()
+//     .replace(/[^a-z0-9._-]+/g, '-')
+//     .replace(/^-+|-+$/g, '')
+//     .replace(/-{2,}/g, '-');
+//
+//   return cleaned || fallback;
+// }
 
 /**
  * Helper used to compute a first-character postings bucket.
  *
  * Terms are bucketed by leading character so we avoid one huge postings file.
  */
-function bucketForTerm(term) {
-  const first = term[0] ?? '';
-
-  if (/[a-z]/.test(first)) {
-    return first;
-  }
-
-  if (/[0-9]/.test(first)) {
-    return 'num';
-  }
-
-  return 'other';
-}
+// function bucketForTerm(term) {
+//   const first = term[0] ?? '';
+//
+//   if (/[a-z]/.test(first)) {
+//     return first;
+//   }
+//
+//   if (/[0-9]/.test(first)) {
+//     return 'num';
+//   }
+//
+//   return 'other';
+// }
 
 /**
  * Stable JSON stringify helper.
@@ -484,9 +484,9 @@ async function isTextFile(filePath, extension) {
 /**
  * Normalizes text for easier searching and scoring.
  */
-function normalizeWhitespace(value) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
-}
+// function normalizeWhitespace(value) {
+//   return String(value ?? '').replace(/\s+/g, ' ').trim();
+// }
 
 /**
  * Splits CamelCase/PascalCase tokens into smaller parts.
@@ -494,39 +494,39 @@ function normalizeWhitespace(value) {
  * Example:
  *   SalesOrderView -> [Sales, Order, View]
  */
-function splitCamelCase(token) {
-  return token
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .split(/\s+/)
-    .filter(Boolean);
-}
+// function splitCamelCase(token) {
+//   return token
+//     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+//     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+//     .split(/\s+/)
+//     .filter(Boolean);
+// }
 
 /**
  * Normalizes a candidate term for indexing.
  */
-function normalizeTerm(term) {
-  return term.toLowerCase().replace(/^[-_.:/]+|[-_.:/]+$/g, '');
-}
+// function normalizeTerm(term) {
+//   return term.toLowerCase().replace(/^[-_.:/]+|[-_.:/]+$/g, '');
+// }
 
 /**
  * Returns true for terms we want to keep in the index.
  */
-function isUsefulTerm(term) {
-  if (!term || term.length < 2) {
-    return false;
-  }
-
-  if (STOPWORDS.has(term)) {
-    return false;
-  }
-
-  if (/^\d+$/.test(term) && term.length < 4) {
-    return false;
-  }
-
-  return true;
-}
+// function isUsefulTerm(term) {
+//   if (!term || term.length < 2) {
+//     return false;
+//   }
+//
+//   if (STOPWORDS.has(term)) {
+//     return false;
+//   }
+//
+//   if (/^\d+$/.test(term) && term.length < 4) {
+//     return false;
+//   }
+//
+//   return true;
+// }
 
 /**
  * Tokenizes text into indexable terms.
@@ -535,124 +535,124 @@ function isUsefulTerm(term) {
  * tokens, then also emits subparts so that queries can match either the full token
  * or its components.
  */
-function tokenizeText(text) {
-  const rawTokens = String(text ?? '').match(/[A-Za-z0-9][A-Za-z0-9._:/-]*/g) ?? [];
-  const output = [];
-
-  for (const rawToken of rawTokens) {
-    const base = normalizeTerm(rawToken);
-
-    if (isUsefulTerm(base)) {
-      output.push(base);
-    }
-
-    const separatorParts = rawToken.split(/[._:/-]+/).filter(Boolean);
-
-    for (const separatorPart of separatorParts) {
-      const normalizedPart = normalizeTerm(separatorPart);
-
-      if (isUsefulTerm(normalizedPart)) {
-        output.push(normalizedPart);
-      }
-
-      const camelParts = splitCamelCase(separatorPart);
-
-      for (const camelPart of camelParts) {
-        const normalizedCamelPart = normalizeTerm(camelPart);
-
-        if (isUsefulTerm(normalizedCamelPart)) {
-          output.push(normalizedCamelPart);
-        }
-      }
-    }
-  }
-
-  return output;
-}
+// function tokenizeText(text) {
+//   const rawTokens = String(text ?? '').match(/[A-Za-z0-9][A-Za-z0-9._:/-]*/g) ?? [];
+//   const output = [];
+//
+//   for (const rawToken of rawTokens) {
+//     const base = normalizeTerm(rawToken);
+//
+//     if (isUsefulTerm(base)) {
+//       output.push(base);
+//     }
+//
+//     const separatorParts = rawToken.split(/[._:/-]+/).filter(Boolean);
+//
+//     for (const separatorPart of separatorParts) {
+//       const normalizedPart = normalizeTerm(separatorPart);
+//
+//       if (isUsefulTerm(normalizedPart)) {
+//         output.push(normalizedPart);
+//       }
+//
+//       const camelParts = splitCamelCase(separatorPart);
+//
+//       for (const camelPart of camelParts) {
+//         const normalizedCamelPart = normalizeTerm(camelPart);
+//
+//         if (isUsefulTerm(normalizedCamelPart)) {
+//           output.push(normalizedCamelPart);
+//         }
+//       }
+//     }
+//   }
+//
+//   return output;
+// }
 
 /**
  * Builds a frequency map from an array of terms.
  */
-function countTerms(terms) {
-  const counts = new Map();
-
-  for (const term of terms) {
-    counts.set(term, (counts.get(term) ?? 0) + 1);
-  }
-
-  return counts;
-}
+// function countTerms(terms) {
+//   const counts = new Map();
+//
+//   for (const term of terms) {
+//     counts.set(term, (counts.get(term) ?? 0) + 1);
+//   }
+//
+//   return counts;
+// }
 
 /**
  * Returns the top-N items from a term-count map.
  */
-function topTermsFromCounts(termCounts, limit = DEFAULT_TOP_TERMS) {
-  return [...termCounts.entries()]
-    .sort((left, right) => {
-      const countDelta = right[1] - left[1];
-      if (countDelta !== 0) {
-        return countDelta;
-      }
-
-      return left[0].localeCompare(right[0]);
-    })
-    .slice(0, limit)
-    .map(([term, count]) => ({ term, count }));
-}
+// function topTermsFromCounts(termCounts, limit = DEFAULT_TOP_TERMS) {
+//   return [...termCounts.entries()]
+//     .sort((left, right) => {
+//       const countDelta = right[1] - left[1];
+//       if (countDelta !== 0) {
+//         return countDelta;
+//       }
+//
+//       return left[0].localeCompare(right[0]);
+//     })
+//     .slice(0, limit)
+//     .map(([term, count]) => ({ term, count }));
+// }
 
 /**
  * Extracts identifier-like tokens for display/ranking.
  */
-function extractIdentifiers(text) {
-  const matches = String(text ?? '').match(/[A-Za-z_][A-Za-z0-9_:-]{2,}/g) ?? [];
-  const counts = new Map();
-
-  for (const match of matches) {
-    const looksAllLower = /^[a-z0-9_:-]+$/.test(match);
-    const looksCommonWord = STOPWORDS.has(match.toLowerCase());
-
-    if (looksAllLower && looksCommonWord) {
-      continue;
-    }
-
-    counts.set(match, (counts.get(match) ?? 0) + 1);
-  }
-
-  return [...counts.entries()]
-    .sort((left, right) => {
-      const countDelta = right[1] - left[1];
-      if (countDelta !== 0) {
-        return countDelta;
-      }
-
-      return left[0].localeCompare(right[0]);
-    })
-    .slice(0, DEFAULT_TOP_IDENTIFIERS)
-    .map(([identifier, count]) => ({ identifier, count }));
-}
+// function extractIdentifiers(text) {
+//   const matches = String(text ?? '').match(/[A-Za-z_][A-Za-z0-9_:-]{2,}/g) ?? [];
+//   const counts = new Map();
+//
+//   for (const match of matches) {
+//     const looksAllLower = /^[a-z0-9_:-]+$/.test(match);
+//     const looksCommonWord = STOPWORDS.has(match.toLowerCase());
+//
+//     if (looksAllLower && looksCommonWord) {
+//       continue;
+//     }
+//
+//     counts.set(match, (counts.get(match) ?? 0) + 1);
+//   }
+//
+//   return [...counts.entries()]
+//     .sort((left, right) => {
+//       const countDelta = right[1] - left[1];
+//       if (countDelta !== 0) {
+//         return countDelta;
+//       }
+//
+//       return left[0].localeCompare(right[0]);
+//     })
+//     .slice(0, DEFAULT_TOP_IDENTIFIERS)
+//     .map(([identifier, count]) => ({ identifier, count }));
+// }
 
 /**
  * Returns a short preview assembled from the first few non-empty lines.
  */
-function buildPreviewFromLines(lines, maxLines = 3, maxLength = 240) {
-  const previewLines = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      continue;
-    }
-
-    previewLines.push(trimmed);
-
-    if (previewLines.length >= maxLines) {
-      break;
-    }
-  }
-
-  return truncate(previewLines.join(' | '), maxLength);
-}
+// function buildPreviewFromLines(lines, maxLines = 3, maxLength = 240) {
+//   const previewLines = [];
+//
+//   for (const line of lines) {
+//     const trimmed = line.trim();
+//
+//     if (!trimmed) {
+//       continue;
+//     }
+//
+//     previewLines.push(trimmed);
+//
+//     if (previewLines.length >= maxLines) {
+//       break;
+//     }
+//   }
+//
+//   return truncate(previewLines.join(' | '), maxLength);
+// }
 
 /**
  * Attempts to infer a title for a chunk boundary line.
@@ -919,21 +919,21 @@ function buildChunkRanges(lines) {
 /**
  * Extracts quoted strings that may be useful for display.
  */
-function extractQuotedStrings(text, limit = 8) {
-  const matches = [];
-  const pattern = /["'`]([^"'`\n]{3,120})["'`]/g;
-  let match;
-
-  while ((match = pattern.exec(text)) !== null) {
-    matches.push(match[1]);
-
-    if (matches.length >= limit) {
-      break;
-    }
-  }
-
-  return matches;
-}
+// function extractQuotedStrings(text, limit = 8) {
+//   const matches = [];
+//   const pattern = /["'`]([^"'`\n]{3,120})["'`]/g;
+//   let match;
+//
+//   while ((match = pattern.exec(text)) !== null) {
+//     matches.push(match[1]);
+//
+//     if (matches.length >= limit) {
+//       break;
+//     }
+//   }
+//
+//   return matches;
+// }
 
 /**
  * Extracts lines that look like keys or labels.
