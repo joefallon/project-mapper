@@ -1,4 +1,5 @@
-.ai/
+.ai/out/
+.ai/scale/
 .idea/
 coverage/
 dist/
