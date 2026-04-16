@@ -1,8 +1,10 @@
-import { normalizeWhitespace, tokenizeText, hasText } from '../../utils';
+import { normalizeWhitespace, tokenizeText, hasText, safeSlug } from '../../utils';
 import { getPaths } from '../constants';
 import { readJson, writeJson } from '../io';
 import path from 'path';
 import { loadCoreState } from '../state';
+
+const QUERY_ARTIFACT_SLUG_MAX_LENGTH = 80;
 
 export function normalizeQuery(query: string) {
     const normalizedQueryText = normalizeWhitespace(String(query ?? ''));
@@ -233,7 +235,9 @@ export async function runQuery(queryText: string, projectRoot?: string) {
 
 export async function persistQueryArtifact(kind: string, queryText: string, payload: unknown, projectRoot?: string) {
     const paths = getPaths(projectRoot);
-    const fileName = `${new Date().toISOString().replace(/[:.]/g, '-')}_${kind}_${String(queryText).replace(/[^a-z0-9._-]+/gi, '-')}.json`;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const slug = safeSlug(queryText, 'query').slice(0, QUERY_ARTIFACT_SLUG_MAX_LENGTH).replace(/[-._]+$/g, '') || 'query';
+    const fileName = `${timestamp}_${safeSlug(kind, 'query')}_${slug}.json`;
     await writeJson(path.join(paths.QUERIES_DIR, fileName), payload);
 }
 

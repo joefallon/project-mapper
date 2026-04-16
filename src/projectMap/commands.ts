@@ -4,6 +4,42 @@ import * as QueryCore from './query/core';
 const QC: any = QueryCore as any;
 import { hasText } from '../utils';
 
+async function persistQueryArtifactBestEffort(kind: string, queryText: string, payload: unknown, projectRoot?: string) {
+    try {
+        await QC.persistQueryArtifact(kind, queryText, payload, projectRoot);
+    } catch(err: any) {
+        const message = err?.message || String(err);
+        console.error(`WARN: could not persist ${kind} artifact: ${message}`);
+    }
+}
+
+function buildInspectArtifactPayload(
+    target: string,
+    byChunkId: any,
+    fileRecord: any,
+    relatedChunks: any[],
+    owningFile: any,
+    resolvedBy: 'chunk_id' | 'file_id' | 'file_path',
+) {
+    if(byChunkId) {
+        return {
+            target,
+            target_type: 'chunk',
+            resolved_by: resolvedBy,
+            chunk: byChunkId,
+            owning_file: owningFile ?? null,
+        };
+    }
+
+    return {
+        target,
+        target_type: 'file',
+        resolved_by: resolvedBy,
+        file: fileRecord,
+        chunks: relatedChunks,
+    };
+}
+
 export async function runStats(projectRoot?: string) {
     const {buildInfo, repoInfo} = await loadCoreState(projectRoot);
 
@@ -86,7 +122,7 @@ export async function runFind(queryText: string, projectRoot?: string) {
         }
     }
 
-    await QC.persistQueryArtifact('find', queryText, QC.makePersistableQueryResult(result), projectRoot);
+    await persistQueryArtifactBestEffort('find', queryText, QC.makePersistableQueryResult(result), projectRoot);
 }
 
 export async function runInspect(target: string, projectRoot?: string) {
@@ -122,10 +158,17 @@ export async function runInspect(target: string, projectRoot?: string) {
         console.log('');
         console.log('TEXT');
         console.log(byChunkId.text);
+        await persistQueryArtifactBestEffort(
+            'inspect',
+            target,
+            buildInspectArtifactPayload(target, byChunkId, null, [], owningFile, 'chunk_id'),
+            projectRoot,
+        );
         return;
     }
 
     const fileRecord = byFileId ?? byFilePath;
+    const resolvedBy = byFileId ? 'file_id' : 'file_path';
 
     if(!fileRecord) {
         throw new Error(`No file or chunk found for inspect target: ${target}`);
@@ -184,6 +227,13 @@ export async function runInspect(target: string, projectRoot?: string) {
             }
         }
     }
+
+    await persistQueryArtifactBestEffort(
+        'inspect',
+        target,
+        buildInspectArtifactPayload(target, null, fileRecord, fileChunks, null, resolvedBy),
+        projectRoot,
+    );
 }
 
 export async function runPack(queryText: string, projectRoot?: string) {
@@ -255,6 +305,6 @@ export async function runPack(queryText: string, projectRoot?: string) {
         }
     }
 
-    await QC.persistQueryArtifact('pack', queryText, QC.makePersistableQueryResult(result), projectRoot);
+    await persistQueryArtifactBestEffort('pack', queryText, QC.makePersistableQueryResult(result), projectRoot);
 }
 
