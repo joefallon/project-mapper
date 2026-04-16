@@ -92,5 +92,7 @@ npm test
 
 ## License
 
-This repository is private in `package.json`; add a license file or update `package.json`
-if you plan to publish.
+This project is released under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+If you plan to publish the package to npm, ensure `package.json` contains the correct
+`license` and `repository` fields.

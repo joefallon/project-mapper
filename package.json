@@ -1,8 +1,14 @@
 {
     "name": "project-mapper",
     "version": "0.1.0",
-    "private": true,
     "type": "module",
+    "author": "Joseph Fallon <joseph.t.fallon@gmail.com>",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/joefallon/project-mapper.git"
+    },
+    "homepage": "https://github.com/joefallon/project-mapper#readme",
     "scripts": {
         "typecheck": "tsc --noEmit",
         "build": "tsc",
