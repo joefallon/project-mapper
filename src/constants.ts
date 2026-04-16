@@ -35,6 +35,20 @@ export const IGNORED_RELATIVE_DIRECTORIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Common file extensions that are almost always binary or asset-oriented.
+ *
+ * Copied from `project-map.mjs` so behavior remains identical without
+ * modifying the original script.
+ */
+export const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.7z', '.a', '.ai', '.avi', '.bin', '.bmp', '.class', '.dll', '.dmg', '.doc',
+  '.docx', '.eot', '.exe', '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lib',
+  '.lockb', '.mov', '.mp3', '.mp4', '.o', '.obj', '.otf', '.pdf', '.png', '.psd',
+  '.so', '.tar', '.tif', '.tiff', '.ttf', '.wav', '.webm', '.webp', '.woff', '.woff2',
+  '.xls', '.xlsx', '.zip',
+]);
+
+/**
  * Some additional file names/patterns that are usually generated noise.
  *
  * Copied from `project-map.mjs` to keep behaviour identical without modifying

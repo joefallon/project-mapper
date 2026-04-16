@@ -443,43 +443,43 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
  * - otherwise sample the bytes
  * - null bytes or a large ratio of disallowed control bytes -> binary
  */
-async function isTextFile(filePath, extension) {
-  if (BINARY_EXTENSIONS.has(extension)) {
-    return false;
-  }
-
-  const sample = await readBinarySample(filePath, 4096);
-
-  if (sample.length === 0) {
-    return true;
-  }
-
-  let nullByteCount = 0;
-  let suspiciousControlCount = 0;
-
-  for (const byte of sample) {
-    if (byte === 0) {
-      nullByteCount += 1;
-      continue;
-    }
-
-    const isTab = byte === 9;
-    const isLineFeed = byte === 10;
-    const isCarriageReturn = byte === 13;
-    const isPrintableAscii = byte >= 32 && byte <= 126;
-
-    if (!isTab && !isLineFeed && !isCarriageReturn && !isPrintableAscii) {
-      suspiciousControlCount += 1;
-    }
-  }
-
-  if (nullByteCount > 0) {
-    return false;
-  }
-
-  const suspiciousRatio = suspiciousControlCount / sample.length;
-  return suspiciousRatio < 0.25;
-}
+// async function isTextFile(filePath, extension) {
+//   if (BINARY_EXTENSIONS.has(extension)) {
+//     return false;
+//   }
+//
+//   const sample = await readBinarySample(filePath, 4096);
+//
+//   if (sample.length === 0) {
+//     return true;
+//   }
+//
+//   let nullByteCount = 0;
+//   let suspiciousControlCount = 0;
+//
+//   for (const byte of sample) {
+//     if (byte === 0) {
+//       nullByteCount += 1;
+//       continue;
+//     }
+//
+//     const isTab = byte === 9;
+//     const isLineFeed = byte === 10;
+//     const isCarriageReturn = byte === 13;
+//     const isPrintableAscii = byte >= 32 && byte <= 126;
+//
+//     if (!isTab && !isLineFeed && !isCarriageReturn && !isPrintableAscii) {
+//       suspiciousControlCount += 1;
+//     }
+//   }
+//
+//   if (nullByteCount > 0) {
+//     return false;
+//   }
+//
+//   const suspiciousRatio = suspiciousControlCount / sample.length;
+//   return suspiciousRatio < 0.25;
+// }
 
 /**
  * Normalizes text for easier searching and scoring.
@@ -727,81 +727,81 @@ function inferBoundaryTitle(lines, startIndex) {
  * This function intentionally uses broad heuristics that work across code, docs,
  * configs, and mixed-content repositories.
  */
-function detectBoundaries(lines) {
-  const boundaries = new Map();
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const currentLine = lines[index] ?? '';
-    const nextLine = lines[index + 1] ?? '';
-
-    // Markdown/ATX headings such as: ## Heading
-    if (MARKDOWN_HEADING_PATTERN.test(currentLine) || HTML_HEADING_PATTERN.test(currentLine)) {
-      boundaries.set(index, {
-        startLine: index + 1,
-        kind: inferBoundaryKind(lines, index),
-        title: inferBoundaryTitle(lines, index),
-      });
-      continue;
-    }
-
-    // Underlined headings such as:
-    // Heading Text
-    // -----------
-    if (hasText(currentLine) && UNDERLINE_HEADING_PATTERN.test(nextLine)) {
-      boundaries.set(index, {
-        startLine: index + 1,
-        kind: 'heading',
-        title: normalizeWhitespace(currentLine),
-      });
-      continue;
-    }
-
-    // INI/TOML style section markers.
-    if (INI_SECTION_PATTERN.test(currentLine)) {
-      boundaries.set(index, {
-        startLine: index + 1,
-        kind: 'section',
-        title: inferBoundaryTitle(lines, index),
-      });
-      continue;
-    }
-
-    // Repeated delimiter lines sometimes separate sections in notes/docs.
-    if (DELIMITER_PATTERN.test(currentLine)) {
-      boundaries.set(index, {
-        startLine: index + 1,
-        kind: 'delimiter',
-        title: inferBoundaryTitle(lines, index),
-      });
-      continue;
-    }
-
-    // Declaration-like lines help split code files without a full parser.
-    for (const pattern of DECLARATION_PATTERNS) {
-      if (pattern.test(currentLine)) {
-        boundaries.set(index, {
-          startLine: index + 1,
-          kind: 'declaration',
-          title: inferBoundaryTitle(lines, index),
-        });
-        break;
-      }
-    }
-  }
-
-  // Always include the start of the file as a valid chunk boundary.
-  if (!boundaries.has(0)) {
-    boundaries.set(0, {
-      startLine: 1,
-      kind: 'window',
-      title: '',
-    });
-  }
-
-  return [...boundaries.entries()]
-    .sort((left, right) => left[0] - right[0])
-    .map(([, boundary]) => boundary);
-}
+// function detectBoundaries(lines) {
+//   const boundaries = new Map();
+//
+//   for (let index = 0; index < lines.length; index += 1) {
+//     const currentLine = lines[index] ?? '';
+//     const nextLine = lines[index + 1] ?? '';
+//
+//     // Markdown/ATX headings such as: ## Heading
+//     if (MARKDOWN_HEADING_PATTERN.test(currentLine) || HTML_HEADING_PATTERN.test(currentLine)) {
+//       boundaries.set(index, {
+//         startLine: index + 1,
+//         kind: inferBoundaryKind(lines, index),
+//         title: inferBoundaryTitle(lines, index),
+//       });
+//       continue;
+//     }
+//
+//     // Underlined headings such as:
+//     // Heading Text
+//     // -----------
+//     if (hasText(currentLine) && UNDERLINE_HEADING_PATTERN.test(nextLine)) {
+//       boundaries.set(index, {
+//         startLine: index + 1,
+//         kind: 'heading',
+//         title: normalizeWhitespace(currentLine),
+//       });
+//       continue;
+//     }
+//
+//     // INI/TOML style section markers.
+//     if (INI_SECTION_PATTERN.test(currentLine)) {
+//       boundaries.set(index, {
+//         startLine: index + 1,
+//         kind: 'section',
+//         title: inferBoundaryTitle(lines, index),
+//       });
+//       continue;
+//     }
+//
+//     // Repeated delimiter lines sometimes separate sections in notes/docs.
+//     if (DELIMITER_PATTERN.test(currentLine)) {
+//       boundaries.set(index, {
+//         startLine: index + 1,
+//         kind: 'delimiter',
+//         title: inferBoundaryTitle(lines, index),
+//       });
+//       continue;
+//     }
+//
+//     // Declaration-like lines help split code files without a full parser.
+//     for (const pattern of DECLARATION_PATTERNS) {
+//       if (pattern.test(currentLine)) {
+//         boundaries.set(index, {
+//           startLine: index + 1,
+//           kind: 'declaration',
+//           title: inferBoundaryTitle(lines, index),
+//         });
+//         break;
+//       }
+//     }
+//   }
+//
+//   // Always include the start of the file as a valid chunk boundary.
+//   if (!boundaries.has(0)) {
+//     boundaries.set(0, {
+//       startLine: 1,
+//       kind: 'window',
+//       title: '',
+//     });
+//   }
+//
+//   return [...boundaries.entries()]
+//     .sort((left, right) => left[0] - right[0])
+//     .map(([, boundary]) => boundary);
+// }
 
 /**
  * Splits a large line range into overlapping fixed-size chunks.
@@ -856,65 +856,65 @@ function detectBoundaries(lines) {
  * 3. split very large natural sections into overlapping windows
  * 4. if boundaries are too weak, use plain fallback windows instead
  */
-function buildChunkRanges(lines) {
-  if (lines.length === 0) {
-    return [];
-  }
-
-  const boundaries = detectBoundaries(lines);
-
-  // If the only boundary is the start of the file, the structure signals are weak.
-  // Fall back to fixed-window chunking.
-  if (boundaries.length <= 1) {
-    const fallbackChunks = [];
-    let startLine = 1;
-    let partIndex = 1;
-
-    while (startLine <= lines.length) {
-      const endLine = Math.min(lines.length, startLine + FALLBACK_CHUNK_LINES - 1);
-      fallbackChunks.push({
-        startLine,
-        endLine,
-        kind: 'window',
-        title: `window ${partIndex}`,
-      });
-
-      if (endLine >= lines.length) {
-        break;
-      }
-
-      startLine = Math.max(endLine - FALLBACK_CHUNK_OVERLAP + 1, startLine + 1);
-      partIndex += 1;
-    }
-
-    return fallbackChunks;
-  }
-
-  const chunkRanges = [];
-
-  for (let index = 0; index < boundaries.length; index += 1) {
-    const currentBoundary = boundaries[index];
-    const nextBoundary = boundaries[index + 1];
-    const startLine = currentBoundary.startLine;
-    const endLine = nextBoundary ? nextBoundary.startLine - 1 : lines.length;
-
-    if (startLine > endLine) {
-      continue;
-    }
-
-    const splitRanges = splitLargeRangeIntoWindows(
-      lines,
-      startLine,
-      endLine,
-      currentBoundary.title,
-      currentBoundary.kind,
-    );
-
-    chunkRanges.push(...splitRanges);
-  }
-
-  return chunkRanges;
-}
+// function buildChunkRanges(lines) {
+//   if (lines.length === 0) {
+//     return [];
+//   }
+//
+//   const boundaries = detectBoundaries(lines);
+//
+//   // If the only boundary is the start of the file, the structure signals are weak.
+//   // Fall back to fixed-window chunking.
+//   if (boundaries.length <= 1) {
+//     const fallbackChunks = [];
+//     let startLine = 1;
+//     let partIndex = 1;
+//
+//     while (startLine <= lines.length) {
+//       const endLine = Math.min(lines.length, startLine + FALLBACK_CHUNK_LINES - 1);
+//       fallbackChunks.push({
+//         startLine,
+//         endLine,
+//         kind: 'window',
+//         title: `window ${partIndex}`,
+//       });
+//
+//       if (endLine >= lines.length) {
+//         break;
+//       }
+//
+//       startLine = Math.max(endLine - FALLBACK_CHUNK_OVERLAP + 1, startLine + 1);
+//       partIndex += 1;
+//     }
+//
+//     return fallbackChunks;
+//   }
+//
+//   const chunkRanges = [];
+//
+//   for (let index = 0; index < boundaries.length; index += 1) {
+//     const currentBoundary = boundaries[index];
+//     const nextBoundary = boundaries[index + 1];
+//     const startLine = currentBoundary.startLine;
+//     const endLine = nextBoundary ? nextBoundary.startLine - 1 : lines.length;
+//
+//     if (startLine > endLine) {
+//       continue;
+//     }
+//
+//     const splitRanges = splitLargeRangeIntoWindows(
+//       lines,
+//       startLine,
+//       endLine,
+//       currentBoundary.title,
+//       currentBoundary.kind,
+//     );
+//
+//     chunkRanges.push(...splitRanges);
+//   }
+//
+//   return chunkRanges;
+// }
 
 /**
  * Extracts quoted strings that may be useful for display.
