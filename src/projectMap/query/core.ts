@@ -3,8 +3,235 @@ import { getPaths } from '../constants';
 import { readJson, writeJson } from '../io';
 import path from 'path';
 import { loadCoreState } from '../state';
+import { extractReferencedPaths } from '../../extractReferencedPaths';
 
 const QUERY_ARTIFACT_SLUG_MAX_LENGTH = 80;
+
+function normalizeRepoPath(value: string) {
+    return String(value ?? '').replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function isTestLikePath(filePath: string, fileClass?: string) {
+    return fileClass === 'test'
+        || /(^|\/)(__tests__|tests?|test)(\/|$)/i.test(filePath)
+        || /\.test\./i.test(filePath)
+        || /\.spec\./i.test(filePath);
+}
+
+function pathStem(filePath: string) {
+    const normalized = normalizeRepoPath(filePath);
+    const baseName = path.posix.basename(normalized).replace(/\.[^.\/]+$/, '').replace(/\.(test|spec)$/i, '');
+    return baseName.toLowerCase();
+}
+
+function pathStemTokens(filePath: string) {
+    return pathStem(filePath)
+        .split(/[^a-z0-9]+/i)
+        .map((token) => token.toLowerCase())
+        .filter((token) => token.length > 1);
+}
+
+function titleTokens(value: string) {
+    return tokenizeText(value).map((token) => token.toLowerCase());
+}
+
+function addRelatedCandidate(candidateMap: Map<string, any>, fileRecord: any, reason: string, score: number) {
+    if(!fileRecord || !fileRecord.indexed) {
+        return;
+    }
+
+    const existing = candidateMap.get(fileRecord.path) ?? {
+        path: fileRecord.path,
+        file_id: fileRecord.file_id,
+        file_class: fileRecord.file_class,
+        preview: fileRecord.preview || '',
+        score: 0,
+        reasons: new Set<string>(),
+    };
+
+    existing.score += score;
+    existing.reasons.add(reason);
+    if(!hasText(existing.preview) && hasText(fileRecord.preview)) {
+        existing.preview = fileRecord.preview;
+    }
+    candidateMap.set(fileRecord.path, existing);
+}
+
+function resolveReferencedPath(state: any, reference: string, basenameMap: Map<string, any[]>) {
+    const normalizedReference = normalizeRepoPath(reference);
+    const exactMatch = state.filesByPath.get(normalizedReference) ?? state.filesByPath.get(path.posix.normalize(normalizedReference));
+    if(exactMatch?.indexed) {
+        return exactMatch;
+    }
+
+    const basename = path.posix.basename(normalizedReference);
+    const basenameMatches = basenameMap.get(basename) ?? [];
+    if(basenameMatches.length === 1) {
+        return basenameMatches[0];
+    }
+
+    return null;
+}
+
+function collectRelatedFiles(state: any, query: any, topChunks: any[], topFiles: any[]) {
+    const topFilePaths = new Set(topFiles.map((file: any) => file.path));
+    const relatedCandidates = new Map<string, any>();
+    const indexedFileRecords = state.fileRecords.filter((fileRecord: any) => fileRecord.indexed);
+    const basenameMap = new Map<string, any[]>();
+    const stemMap = new Map<string, any[]>();
+    const directoryMap = new Map<string, any[]>();
+    const salientIdentifiers = new Set<string>();
+    const salientTitleTokens = new Set<string>();
+
+    for(const fileRecord of indexedFileRecords) {
+        const basename = path.posix.basename(fileRecord.path);
+        const stem = pathStem(fileRecord.path);
+        const directory = path.posix.dirname(fileRecord.path);
+
+        if(!basenameMap.has(basename)) {
+            basenameMap.set(basename, []);
+        }
+        basenameMap.get(basename)!.push(fileRecord);
+
+        if(!stemMap.has(stem)) {
+            stemMap.set(stem, []);
+        }
+        stemMap.get(stem)!.push(fileRecord);
+
+        if(!directoryMap.has(directory)) {
+            directoryMap.set(directory, []);
+        }
+        directoryMap.get(directory)!.push(fileRecord);
+    }
+
+    for(const records of basenameMap.values()) {
+        records.sort((left, right) => left.path.localeCompare(right.path));
+    }
+    for(const records of stemMap.values()) {
+        records.sort((left, right) => left.path.localeCompare(right.path));
+    }
+    for(const records of directoryMap.values()) {
+        records.sort((left, right) => left.path.localeCompare(right.path));
+    }
+
+    const referenceText = [
+        ...topChunks.slice(0, 8).map((chunk: any) => [chunk.title, chunk.preview, chunk.text].filter(hasText).join('\n')),
+        ...topFiles.slice(0, 4).map((file: any) => [file.preview].filter(hasText).join('\n')),
+    ].join('\n');
+
+    const referencedPaths = extractReferencedPaths(
+        referenceText,
+        new Set(indexedFileRecords.map((fileRecord: any) => path.posix.basename(fileRecord.path))),
+    );
+
+    for(const referencePath of referencedPaths) {
+        const resolvedFile = resolveReferencedPath(state, referencePath, basenameMap);
+        if(resolvedFile && !topFilePaths.has(resolvedFile.path)) {
+            addRelatedCandidate(relatedCandidates, resolvedFile, `referenced path: ${referencePath}`, 100);
+        }
+    }
+
+    for(const topFile of topFiles) {
+        const topFileRecord = state.filesById.get(topFile.file_id);
+        if(!topFileRecord) {
+            continue;
+        }
+
+        const topStem = pathStem(topFileRecord.path);
+        const pairedFiles = stemMap.get(topStem) ?? [];
+        const topIsTestLike = isTestLikePath(topFileRecord.path, topFileRecord.file_class);
+
+        for(const candidateFile of pairedFiles) {
+            if(candidateFile.path === topFileRecord.path || topFilePaths.has(candidateFile.path)) {
+                continue;
+            }
+
+            const candidateIsTestLike = isTestLikePath(candidateFile.path, candidateFile.file_class);
+            if(candidateIsTestLike === topIsTestLike) {
+                continue;
+            }
+
+            addRelatedCandidate(
+                relatedCandidates,
+                candidateFile,
+                topIsTestLike ? 'paired source file' : 'paired test file',
+                80,
+            );
+        }
+
+        const topDirectory = path.posix.dirname(topFileRecord.path);
+        const siblingFiles = directoryMap.get(topDirectory) ?? [];
+        const topStemTokens = new Set(pathStemTokens(topFileRecord.path));
+
+        for(const candidateFile of siblingFiles) {
+            if(candidateFile.path === topFileRecord.path || topFilePaths.has(candidateFile.path)) {
+                continue;
+            }
+
+            const candidateStemTokens = pathStemTokens(candidateFile.path);
+            if(candidateStemTokens.some((token) => topStemTokens.has(token))) {
+                addRelatedCandidate(relatedCandidates, candidateFile, 'same directory sibling', 40);
+            }
+        }
+
+        for(const identifier of topFileRecord.top_identifiers ?? []) {
+            salientIdentifiers.add(String(identifier.identifier ?? '').toLowerCase());
+        }
+        for(const sectionTitle of topFileRecord.section_titles ?? []) {
+            for(const token of titleTokens(sectionTitle)) {
+                salientTitleTokens.add(token);
+            }
+        }
+    }
+
+    for(const topChunk of topChunks) {
+        for(const identifier of topChunk.top_identifiers ?? []) {
+            salientIdentifiers.add(String(identifier.identifier ?? '').toLowerCase());
+        }
+        for(const token of titleTokens(topChunk.title || '')) {
+            salientTitleTokens.add(token);
+        }
+    }
+
+    for(const fileRecord of indexedFileRecords) {
+        if(topFilePaths.has(fileRecord.path)) {
+            continue;
+        }
+
+        const candidateIdentifiers = new Set<string>(
+            (fileRecord.top_identifiers ?? [])
+                .map((identifier: any) => String(identifier.identifier ?? '').toLowerCase())
+                .filter((identifier: string) => identifier.length > 0),
+        );
+        const sharedIdentifier = [...candidateIdentifiers].find((identifier) => salientIdentifiers.has(identifier));
+        if(sharedIdentifier) {
+            addRelatedCandidate(relatedCandidates, fileRecord, `shared identifier: ${sharedIdentifier}`, 25);
+            continue;
+        }
+
+        const candidateTitleTokens = new Set<string>();
+        for(const title of fileRecord.section_titles ?? []) {
+            for(const token of titleTokens(title)) {
+                candidateTitleTokens.add(token);
+            }
+        }
+        const sharedTitleToken = [...candidateTitleTokens].find((token) => salientTitleTokens.has(token));
+        if(sharedTitleToken) {
+            addRelatedCandidate(relatedCandidates, fileRecord, `shared title: ${sharedTitleToken}`, 15);
+        }
+    }
+
+    return [...relatedCandidates.values()]
+        .map((candidate: any) => ({
+            path:      candidate.path,
+            reason:    [...candidate.reasons].sort().join('; '),
+            score:     candidate.score,
+            preview:   candidate.preview,
+            file_class: candidate.file_class,
+        }))
+        .sort((left: any, right: any) => right.score - left.score || left.path.localeCompare(right.path))
+        .slice(0, 6);
+}
 
 export function normalizeQuery(query: string) {
     const normalizedQueryText = normalizeWhitespace(String(query ?? ''));
@@ -94,6 +321,7 @@ export function scoreChunkForQuery({chunkRecord, fileRecord, query, postingsByTe
         start_line:    chunkRecord.start_line,
         end_line:      chunkRecord.end_line,
         preview:       chunkRecord.preview,
+        text:          chunkRecord.text,
         matched_terms: matchedTerms,
         score,
         reasons:       [...new Set(reasons)],
@@ -222,7 +450,7 @@ export async function runQuery(queryText: string, projectRoot?: string) {
         })
         .sort((left: any, right: any) => right.score - left.score || left.path.localeCompare(right.path));
 
-    const relatedFiles: any[] = [];
+    const relatedFiles = collectRelatedFiles(state, query, chunkScores.slice(0, 12), topFiles.slice(0, 8));
 
     return {
         state,
@@ -242,10 +470,20 @@ export async function persistQueryArtifact(kind: string, queryText: string, payl
 }
 
 export function makePersistableQueryResult(result: any) {
-    return {
+    const payload: any = {
         query:        result.query,
         topFiles:     result.topFiles,
         topChunks:    result.topChunks,
         relatedFiles: result.relatedFiles,
     };
+
+    if(result.command) {
+        payload.command = result.command;
+    }
+
+    if(result.suggestedNextCommands) {
+        payload.suggestedNextCommands = result.suggestedNextCommands;
+    }
+
+    return payload;
 }

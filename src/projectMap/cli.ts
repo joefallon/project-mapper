@@ -4,6 +4,22 @@ import { getPaths } from './constants';
 import { runBuild } from './build/collect';
 import { runStats, runFind, runInspect, runPack } from './commands';
 
+function parseOutputMode(args: string[]) {
+    const filtered: string[] = [];
+    let outputMode: 'text' | 'json' = 'text';
+
+    for(const arg of args) {
+        if(arg === '--json') {
+            outputMode = 'json';
+            continue;
+        }
+
+        filtered.push(arg);
+    }
+
+    return {args: filtered, outputMode};
+}
+
 export function printHelp(projectRoot?: string) {
     const paths = getPaths(projectRoot);
     const scriptPath = path.relative(paths.PROJECT_ROOT, fileURLToPath(import.meta.url)) || '.ai/scale/project-map.mjs';
@@ -20,10 +36,13 @@ export function printHelp(projectRoot?: string) {
     console.log('    Prints a compact high-level project summary.');
     console.log('  find "<query>"');
     console.log('    Prints ranked candidate files and chunks for a query.');
+    console.log('    Add --json to return structured output.');
     console.log('  inspect "<path-or-id>"');
     console.log('    Prints structured details for one file or chunk.');
+    console.log('    Add --json to return structured output.');
     console.log('  pack "<task-or-question>"');
     console.log('    Prints a compact investigation packet optimized for browser-based work.');
+    console.log('    Add --json to return structured output.');
     console.log('  help');
     console.log('    Prints this help text.');
     console.log('');
@@ -37,7 +56,8 @@ export function printHelp(projectRoot?: string) {
 
 export async function main(argv?: string[], projectRoot?: string) {
     const args = argv ?? process.argv.slice(2);
-    const [command, ...rest] = args;
+    const {args: filteredArgs, outputMode} = parseOutputMode(args);
+    const [command, ...rest] = filteredArgs;
 
     switch(command) {
         case 'build':
@@ -59,7 +79,7 @@ export async function main(argv?: string[], projectRoot?: string) {
             if(!queryText) {
                 throw new Error('The find command requires a query string.');
             }
-            await runFind(queryText, projectRoot);
+            await runFind(queryText, projectRoot, outputMode);
             break;
         }
 
@@ -68,7 +88,7 @@ export async function main(argv?: string[], projectRoot?: string) {
             if(!target) {
                 throw new Error('The inspect command requires a path or id.');
             }
-            await runInspect(target, projectRoot);
+            await runInspect(target, projectRoot, outputMode);
             break;
         }
 
@@ -77,7 +97,7 @@ export async function main(argv?: string[], projectRoot?: string) {
             if(!queryText) {
                 throw new Error('The pack command requires a task or question.');
             }
-            await runPack(queryText, projectRoot);
+            await runPack(queryText, projectRoot, outputMode);
             break;
         }
 

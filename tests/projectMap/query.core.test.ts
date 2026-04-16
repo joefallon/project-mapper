@@ -84,7 +84,7 @@ function makeState() {
         kind: 'body',
         title: 'Alpha Section',
         preview: 'chunk preview',
-        text: 'alpha beta exact phrase',
+        text: 'alpha beta exact phrase See src/helper.ts and tests/example.test.ts for details.',
         line_count: 2,
         top_identifiers: [{identifier: 'beta', count: 1}],
         top_terms: [{term: 'alpha', count: 1}],
@@ -117,32 +117,93 @@ function makeState() {
         top_identifiers: [],
         top_terms: [],
     };
+    const helperFile = {
+        file_id: 'f0004',
+        path: 'src/helper.ts',
+        file_class: 'source',
+        indexed: true,
+        extension: '.ts',
+        size_bytes: 88,
+        line_count: 6,
+        chunk_count: 1,
+        preview: 'helper preview',
+    };
+    const helperChunk = {
+        chunk_id: 'c0004',
+        file_id: 'f0004',
+        path: 'src/helper.ts',
+        start_line: 1,
+        end_line: 6,
+        kind: 'body',
+        title: 'Helper chunk',
+        preview: 'helper chunk preview',
+        text: 'helper utilities',
+        line_count: 1,
+        top_identifiers: [{identifier: 'helper', count: 1}],
+        top_terms: [{term: 'helper', count: 1}],
+    };
+    const pairedTestFile = {
+        file_id: 'f0005',
+        path: 'tests/example.test.ts',
+        file_class: 'test',
+        indexed: true,
+        extension: '.ts',
+        size_bytes: 101,
+        line_count: 12,
+        chunk_count: 1,
+        preview: 'test preview',
+    };
+    const pairedTestChunk = {
+        chunk_id: 'c0005',
+        file_id: 'f0005',
+        path: 'tests/example.test.ts',
+        start_line: 1,
+        end_line: 12,
+        kind: 'body',
+        title: 'Example test',
+        preview: 'test chunk preview',
+        text: 'describe example helper',
+        line_count: 2,
+        top_identifiers: [{identifier: 'describe', count: 1}],
+        top_terms: [{term: 'example', count: 1}],
+    };
 
     return {
         state: {
             filesById: new Map([
                 [matchingFile.file_id, matchingFile],
                 [unindexedFile.file_id, unindexedFile],
+                [helperFile.file_id, helperFile],
+                [pairedTestFile.file_id, pairedTestFile],
             ]),
             filesByPath: new Map([
                 [matchingFile.path, matchingFile],
                 [unindexedFile.path, unindexedFile],
+                [helperFile.path, helperFile],
+                [pairedTestFile.path, pairedTestFile],
             ]),
             chunksById: new Map([
                 [matchingChunk.chunk_id, matchingChunk],
                 [unindexedChunk.chunk_id, unindexedChunk],
                 [missingFileChunk.chunk_id, missingFileChunk],
+                [helperChunk.chunk_id, helperChunk],
+                [pairedTestChunk.chunk_id, pairedTestChunk],
             ]),
             chunksByFileId: new Map([
                 [matchingFile.file_id, [matchingChunk]],
                 [unindexedFile.file_id, [unindexedChunk]],
+                [helperFile.file_id, [helperChunk]],
+                [pairedTestFile.file_id, [pairedTestChunk]],
             ]),
+            fileRecords: [matchingFile, unindexedFile, helperFile, pairedTestFile],
         },
         matchingFile,
         unindexedFile,
         matchingChunk,
         unindexedChunk,
         missingFileChunk,
+        helperFile,
+        pairedTestFile,
     };
 }
 
@@ -293,7 +354,13 @@ describe('query core', () => {
         expect(result.topFiles).toHaveLength(1);
         expect(result.topFiles[0].file_id).toBe('f0001');
         expect(result.topFiles[0].best_chunks[0].chunk_id).toBe(matchingChunk.chunk_id);
-        expect(result.relatedFiles).toEqual([]);
+        expect(result.relatedFiles).toEqual(expect.arrayContaining([
+            expect.objectContaining({path: 'src/helper.ts', reason: expect.stringContaining('referenced path')}),
+            expect.objectContaining({path: 'tests/example.test.ts'}),
+        ]));
+
+        const secondResult = await runQuery('alpha beta', projectRoot);
+        expect(secondResult.relatedFiles).toEqual(result.relatedFiles);
     });
 
     it('returns empty query results without loading postings', async () => {
@@ -333,18 +400,22 @@ describe('query core', () => {
 
     it('builds persistable query results without changing shape', () => {
         const result = makePersistableQueryResult({
+            command: 'find',
             query: {original: 'x'},
             topFiles: [{path: 'a'}],
             topChunks: [{chunk_id: 'c'}],
             relatedFiles: [{path: 'b'}],
+            suggestedNextCommands: ['node .ai/scale/project-map.mjs stats'],
             extra: true,
         });
 
         expect(result).toEqual({
+            command: 'find',
             query: {original: 'x'},
             topFiles: [{path: 'a'}],
             topChunks: [{chunk_id: 'c'}],
             relatedFiles: [{path: 'b'}],
+            suggestedNextCommands: ['node .ai/scale/project-map.mjs stats'],
         });
     });
 });

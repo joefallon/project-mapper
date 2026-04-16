@@ -116,8 +116,35 @@ describe('command persistence', () => {
         await expect(runFind('Find me', '/tmp/project')).resolves.toBeUndefined();
         await expect(runPack('Find me', '/tmp/project')).resolves.toBeUndefined();
 
-        expect(mocks.persistQueryArtifact).toHaveBeenNthCalledWith(1, 'find', 'Find me', result, '/tmp/project');
-        expect(mocks.persistQueryArtifact).toHaveBeenNthCalledWith(2, 'pack', 'Find me', result, '/tmp/project');
+        expect(mocks.persistQueryArtifact).toHaveBeenNthCalledWith(
+            1,
+            'find',
+            'Find me',
+            expect.objectContaining({
+                command: 'find',
+                query: result.query,
+                topFiles: result.topFiles,
+                topChunks: result.topChunks,
+                relatedFiles: result.relatedFiles,
+            }),
+            '/tmp/project',
+        );
+        expect(mocks.persistQueryArtifact).toHaveBeenNthCalledWith(
+            2,
+            'pack',
+            'Find me',
+            expect.objectContaining({
+                command: 'pack',
+                query: result.query,
+                topFiles: result.topFiles,
+                topChunks: result.topChunks,
+                relatedFiles: result.relatedFiles,
+                suggestedNextCommands: expect.arrayContaining([
+                    'node .ai/scale/project-map.mjs inspect "c0001"',
+                ]),
+            }),
+            '/tmp/project',
+        );
     });
 
     it('prints stats and resolves successfully', async () => {
@@ -145,11 +172,12 @@ describe('command persistence', () => {
             'inspect',
             'c0001',
             expect.objectContaining({
+                command: 'inspect',
                 target: 'c0001',
-                target_type: 'chunk',
-                resolved_by: 'chunk_id',
+                type: 'chunk',
+                resolvedBy: 'chunk_id',
                 chunk: chunkRecord,
-                owning_file: fileRecord,
+                owningFile: fileRecord,
             }),
             '/tmp/project',
         );
@@ -159,9 +187,10 @@ describe('command persistence', () => {
             'inspect',
             'src/example.ts',
             expect.objectContaining({
+                command: 'inspect',
                 target: 'src/example.ts',
-                target_type: 'file',
-                resolved_by: 'file_path',
+                type: 'file',
+                resolvedBy: 'file_path',
                 file: fileRecord,
                 chunks: [chunkRecord],
             }),
@@ -200,9 +229,10 @@ describe('command persistence', () => {
             'inspect',
             'f0003',
             expect.objectContaining({
+                command: 'inspect',
                 target: 'f0003',
-                target_type: 'file',
-                resolved_by: 'file_id',
+                type: 'file',
+                resolvedBy: 'file_id',
                 file: fileRecord,
                 chunks: [],
             }),
@@ -274,5 +304,50 @@ describe('command persistence', () => {
 
         expect(console.log).toHaveBeenCalledWith('SUGGESTED NEXT COMMANDS');
         expect(console.log).toHaveBeenCalledWith(expect.stringContaining('inspect'));
+    });
+
+    it('emits structured JSON for find, pack, and inspect', async () => {
+        const {state, fileRecord, chunkRecord} = makeState();
+        const result = {
+            query: {original: 'Find me', normalized_text: 'find me', terms: ['find', 'me']},
+            topFiles: [{path: 'src/example.ts', score: 10, file_class: 'source', reasons: ['match'], preview: 'file preview', best_chunks: []}],
+            topChunks: [{chunk_id: 'c0001', path: 'src/example.ts', start_line: 1, end_line: 20, title: 'Example chunk', score: 7, reasons: ['match'], preview: 'chunk preview'}],
+            relatedFiles: [{path: 'src/related.ts', reason: 'neighbor'}],
+        };
+
+        mocks.loadCoreState.mockResolvedValue(state);
+        mocks.runQuery.mockResolvedValue(result);
+        mocks.persistQueryArtifact.mockResolvedValue(undefined);
+
+        await expect(runFind('Find me', '/tmp/project', 'json')).resolves.toBeUndefined();
+        await expect(runPack('Find me', '/tmp/project', 'json')).resolves.toBeUndefined();
+        await expect(runInspect('c0001', '/tmp/project', 'json')).resolves.toBeUndefined();
+
+        const jsonPayloads = console.log.mock.calls
+            .map(([line]) => {
+                try {
+                    return JSON.parse(String(line));
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+
+        expect(jsonPayloads[0]).toEqual(expect.objectContaining({
+            command: 'find',
+            query: result.query,
+            relatedFiles: result.relatedFiles,
+        }));
+        expect(jsonPayloads[1]).toEqual(expect.objectContaining({
+            command: 'pack',
+            suggestedNextCommands: expect.any(Array),
+        }));
+        expect(jsonPayloads[2]).toEqual(expect.objectContaining({
+            command: 'inspect',
+            type: 'chunk',
+            target: 'c0001',
+        }));
+        expect(jsonPayloads[2].chunk).toEqual(chunkRecord);
+        expect(jsonPayloads[2].owningFile).toEqual(fileRecord);
     });
 });

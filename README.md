@@ -1,93 +1,96 @@
 # project-mapper
 
-ProjectMap — a small, zero-dependency Node CLI that builds a compact, queryable synopsis
-of a codebase. This repository contains a TypeScript port of the original `project-map.mjs`
-script and a build pipeline that bundles the TypeScript sources into a single
-executable ESM file at `.ai/scale/project-map.mjs`.
+ProjectMap is a small Node CLI that builds a compact, queryable synopsis of a codebase.
+This repo contains the TypeScript source and a build pipeline that bundles the CLI into
+`.ai/scale/project-map.mjs`.
 
-This README describes how to build, test, and run the bundled CLI on Windows (PowerShell)
-and Unix-like systems.
+## Prerequisites
 
-Prerequisites
+- Node.js 18+
+- npm
 
-- Node.js 18+ (the bundle target is Node 18)
-- npm (or yarn/pnpm)
-
-Quickstart — build and run
-
-1. Install dev dependencies (once):
+## Install
 
 ```powershell
 npm install
 ```
 
-2. Build TypeScript and produce a single bundled CLI (`.ai/scale/project-map.mjs`):
+## Build
+
+Build TypeScript and produce the bundled CLI:
 
 ```powershell
-# full flow: typecheck -> tsc -> esbuild bundle
 npm run dist
 ```
 
-If you only want the single-file bundle (esbuild) without running `tsc`, run:
+If you only want the bundled file:
 
 ```powershell
 npm run bundle
 ```
 
-3. Run the bundled CLI (example shows the help text):
+## Using `project-map.mjs`
+
+After building, run the bundled CLI from the repo root:
 
 ```powershell
 node .ai/scale/project-map.mjs help
 ```
 
-Development scripts
+Common commands:
 
-- `npm run typecheck` — run `tsc --noEmit` to type-check the project
-- `npm run build` — run `tsc` to emit compiled JS to `dist/`
-- `npm run bundle` — produce `.ai/scale/project-map.mjs` using esbuild (via `scripts/bundle.cjs`)
-- `npm run dist` — run `build` then `bundle`
-- `npm test` — run unit tests (Vitest)
+```powershell
+node .ai/scale/project-map.mjs build
+node .ai/scale/project-map.mjs stats
+node .ai/scale/project-map.mjs find "sales order rate retrieval"
+node .ai/scale/project-map.mjs find "sales order rate retrieval" --json
+node .ai/scale/project-map.mjs inspect "application/controllers/QbeSalesOrderViewController.php"
+node .ai/scale/project-map.mjs inspect "c0000001" --json
+node .ai/scale/project-map.mjs pack "Where does sales order rate retrieval happen?"
+node .ai/scale/project-map.mjs pack "Where does sales order rate retrieval happen?" --json
+```
 
-Where the bundle goes
+Behavior notes:
 
-- The bundle output is `.ai/scale/project-map.mjs` (and a source map `.ai/scale/project-map.mjs.map`).
-- The bundle includes a shebang so on Unix-like systems you can run it directly after
-  setting the executable bit: `chmod +x .ai/scale/project-map.mjs`.
+- `build` rebuilds `.ai/scale/state` from scratch.
+- `find` ranks matching files and chunks for a query.
+- `inspect` prints structured details for one file or chunk.
+- `pack` prints a compact investigation packet for browser-based work.
+- `--json` returns structured output for `find`, `inspect`, and `pack`.
 
-Notes about the build
+On Unix-like systems you can run the bundle directly after making it executable:
 
-- We use esbuild (devDependency) for fast bundling. Because of Windows shell quoting
-  differences, the npm `bundle` script runs a small Node wrapper at `scripts/bundle.cjs`
-  that calls esbuild's JS API and sets the shebang banner reliably across platforms.
-- The TypeScript configuration lives in `tsconfig.json` and emits to `dist/` when you
-  run `npm run build`. The single-file bundle is produced from the TypeScript sources
-  (esbuild handles TS input directly).
+```bash
+chmod +x .ai/scale/project-map.mjs
+./.ai/scale/project-map.mjs help
+```
 
-Testing
+## Development scripts
 
-- Unit tests are powered by Vitest. Run the test suite with:
+- `npm run typecheck` - run `tsc --noEmit`
+- `npm run build` - emit compiled JS to `dist/`
+- `npm run bundle` - produce `.ai/scale/project-map.mjs`
+- `npm run dist` - run `build` then `bundle`
+- `npm test` - run the unit test suite
+
+## Testing
 
 ```powershell
 npm test
 ```
 
-Troubleshooting
+## Troubleshooting
 
-- If `npm run bundle` fails with a quoting/CLI error on Windows, ensure `esbuild` is
-  installed and run `node scripts/bundle.cjs` directly.
-- If TypeScript reports errors, run `npm run typecheck` to see the failures and fix
-  the TypeScript source accordingly.
+- If `npm run bundle` fails on Windows, run `node scripts/bundle.cjs` directly.
+- If TypeScript reports errors, run `npm run typecheck`.
 
-Contributing
+## Contributing
 
 - Follow the existing coding style in `src/`.
-- Add unit tests under `tests/` for any new behavior.
+- Add unit tests under `tests/` for new behavior.
 - Run `npm run typecheck` and `npm test` before opening a PR.
 
-License
+## License
 
-- This repository is private in package.json; add a license file or update package.json
-  if you plan to publish.
-
-If you'd like, I can add a short contributor-focused checklist, CI steps (GitHub Actions),
-or prepare a smaller developer helper script that runs `typecheck`, `test`, and `dist` in one step.
+This repository is private in `package.json`; add a license file or update `package.json`
+if you plan to publish.

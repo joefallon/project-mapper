@@ -1,8 +1,11 @@
 import { loadCoreState } from './state';
 import * as QueryCore from './query/core';
+import prettyJson from '../prettyJson';
+import { hasText } from '../utils';
 
 const QC: any = QueryCore as any;
-import { hasText } from '../utils';
+
+type OutputMode = 'text' | 'json';
 
 async function persistQueryArtifactBestEffort(kind: string, queryText: string, payload: unknown, projectRoot?: string) {
     try {
@@ -11,6 +14,40 @@ async function persistQueryArtifactBestEffort(kind: string, queryText: string, p
         const message = err?.message || String(err);
         console.error(`WARN: could not persist ${kind} artifact: ${message}`);
     }
+}
+
+function buildQueryArtifactPayload(command: 'find' | 'pack', result: any) {
+    const payload: any = QC.makePersistableQueryResult({
+        ...result,
+        command,
+    });
+
+    return payload;
+}
+
+function buildSuggestedNextCommands(result: any) {
+    const suggestions: string[] = [];
+
+    if(result.topFiles.length === 0 && result.topChunks.length === 0) {
+        suggestions.push('node .ai/scale/project-map.mjs stats');
+        suggestions.push(`node .ai/scale/project-map.mjs find ${JSON.stringify(result.query.normalized_text || result.query.original)}`);
+        return suggestions;
+    }
+
+    const suggestedPaths = new Set<string>();
+
+    for(const chunk of result.topChunks.slice(0, 4)) {
+        suggestions.push(`node .ai/scale/project-map.mjs inspect ${JSON.stringify(chunk.chunk_id)}`);
+        suggestedPaths.add(chunk.path);
+    }
+
+    for(const file of result.topFiles.slice(0, 3)) {
+        if(!suggestedPaths.has(file.path)) {
+            suggestions.push(`node .ai/scale/project-map.mjs inspect ${JSON.stringify(file.path)}`);
+        }
+    }
+
+    return suggestions;
 }
 
 function buildInspectArtifactPayload(
@@ -23,18 +60,20 @@ function buildInspectArtifactPayload(
 ) {
     if(byChunkId) {
         return {
+            command: 'inspect',
             target,
-            target_type: 'chunk',
-            resolved_by: resolvedBy,
+            type: 'chunk',
+            resolvedBy,
             chunk: byChunkId,
-            owning_file: owningFile ?? null,
+            owningFile: owningFile ?? null,
         };
     }
 
     return {
+        command: 'inspect',
         target,
-        target_type: 'file',
-        resolved_by: resolvedBy,
+        type: 'file',
+        resolvedBy,
         file: fileRecord,
         chunks: relatedChunks,
     };
@@ -73,8 +112,15 @@ export async function runStats(projectRoot?: string) {
     }
 }
 
-export async function runFind(queryText: string, projectRoot?: string) {
+export async function runFind(queryText: string, projectRoot?: string, outputMode: OutputMode = 'text') {
     const result = await QC.runQuery(queryText, projectRoot);
+    const payload = buildQueryArtifactPayload('find', result);
+
+    if(outputMode === 'json') {
+        console.log(prettyJson(payload));
+        await persistQueryArtifactBestEffort('find', queryText, payload, projectRoot);
+        return;
+    }
 
     console.log(`QUERY: ${result.query.normalized_text || result.query.original}`);
     console.log('');
@@ -122,10 +168,10 @@ export async function runFind(queryText: string, projectRoot?: string) {
         }
     }
 
-    await persistQueryArtifactBestEffort('find', queryText, QC.makePersistableQueryResult(result), projectRoot);
+    await persistQueryArtifactBestEffort('find', queryText, payload, projectRoot);
 }
 
-export async function runInspect(target: string, projectRoot?: string) {
+export async function runInspect(target: string, projectRoot?: string, outputMode: OutputMode = 'text') {
     const state = await loadCoreState(projectRoot);
 
     const byFileId = state.filesById.get(target);
@@ -134,6 +180,13 @@ export async function runInspect(target: string, projectRoot?: string) {
 
     if(byChunkId) {
         const owningFile = state.filesById.get(byChunkId.file_id);
+        const payload = buildInspectArtifactPayload(target, byChunkId, null, [], owningFile, 'chunk_id');
+
+        if(outputMode === 'json') {
+            console.log(prettyJson(payload));
+            await persistQueryArtifactBestEffort('inspect', target, payload, projectRoot);
+            return;
+        }
 
         console.log(`INSPECT: ${target}`);
         console.log(`type: chunk`);
@@ -158,12 +211,7 @@ export async function runInspect(target: string, projectRoot?: string) {
         console.log('');
         console.log('TEXT');
         console.log(byChunkId.text);
-        await persistQueryArtifactBestEffort(
-            'inspect',
-            target,
-            buildInspectArtifactPayload(target, byChunkId, null, [], owningFile, 'chunk_id'),
-            projectRoot,
-        );
+        await persistQueryArtifactBestEffort('inspect', target, payload, projectRoot);
         return;
     }
 
@@ -175,6 +223,13 @@ export async function runInspect(target: string, projectRoot?: string) {
     }
 
     const fileChunks = state.chunksByFileId.get(fileRecord.file_id) ?? [];
+    const payload = buildInspectArtifactPayload(target, null, fileRecord, fileChunks, null, resolvedBy);
+
+    if(outputMode === 'json') {
+        console.log(prettyJson(payload));
+        await persistQueryArtifactBestEffort('inspect', target, payload, projectRoot);
+        return;
+    }
 
     console.log(`INSPECT: ${target}`);
     console.log(`type: file`);
@@ -228,16 +283,21 @@ export async function runInspect(target: string, projectRoot?: string) {
         }
     }
 
-    await persistQueryArtifactBestEffort(
-        'inspect',
-        target,
-        buildInspectArtifactPayload(target, null, fileRecord, fileChunks, null, resolvedBy),
-        projectRoot,
-    );
+    await persistQueryArtifactBestEffort('inspect', target, payload, projectRoot);
 }
 
-export async function runPack(queryText: string, projectRoot?: string) {
+export async function runPack(queryText: string, projectRoot?: string, outputMode: OutputMode = 'text') {
     const result = await QC.runQuery(queryText, projectRoot);
+    const payload = {
+        ...buildQueryArtifactPayload('pack', result),
+        suggestedNextCommands: buildSuggestedNextCommands(result),
+    };
+
+    if(outputMode === 'json') {
+        console.log(prettyJson(payload));
+        await persistQueryArtifactBestEffort('pack', queryText, payload, projectRoot);
+        return;
+    }
 
     console.log(`TASK: ${result.query.normalized_text || result.query.original}`);
     console.log('');
@@ -287,24 +347,10 @@ export async function runPack(queryText: string, projectRoot?: string) {
 
     console.log('');
     console.log('SUGGESTED NEXT COMMANDS');
-    if(result.topFiles.length === 0 && result.topChunks.length === 0) {
-        console.log('- node .ai/scale/project-map.mjs stats');
-        console.log(`- node .ai/scale/project-map.mjs find ${JSON.stringify(result.query.normalized_text || result.query.original)}`);
-    } else {
-        const suggestedPaths = new Set();
-
-        for(const chunk of result.topChunks.slice(0, 4)) {
-            console.log(`- node .ai/scale/project-map.mjs inspect ${JSON.stringify(chunk.chunk_id)}`);
-            suggestedPaths.add(chunk.path);
-        }
-
-        for(const file of result.topFiles.slice(0, 3)) {
-            if(!suggestedPaths.has(file.path)) {
-                console.log(`- node .ai/scale/project-map.mjs inspect ${JSON.stringify(file.path)}`);
-            }
-        }
+    for(const suggestion of payload.suggestedNextCommands) {
+        console.log(`- ${suggestion}`);
     }
 
-    await persistQueryArtifactBestEffort('pack', queryText, QC.makePersistableQueryResult(result), projectRoot);
+    await persistQueryArtifactBestEffort('pack', queryText, payload, projectRoot);
 }
 
