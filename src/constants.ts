@@ -4,24 +4,24 @@
  * Source (project-map.mjs): IGNORED_DIRECTORY_NAMES and IGNORED_RELATIVE_DIRECTORIES
  */
 export const IGNORED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
-  '.git',
-  '.hg',
-  '.svn',
-  '.idea',
-  '.vscode',
-  '.next',
-  '.nuxt',
-  '.obsidian',
-  '.cache',
-  '.turbo',
-  'node_modules',
-  'vendor',
-  'dist',
-  'build',
-  'coverage',
-  'tmp',
-  'temp',
-  '__pycache__',
+    '.git',
+    '.hg',
+    '.svn',
+    '.idea',
+    '.vscode',
+    '.next',
+    '.nuxt',
+    '.obsidian',
+    '.cache',
+    '.turbo',
+    'node_modules',
+    'vendor',
+    'dist',
+    'build',
+    'coverage',
+    'tmp',
+    'temp',
+    '__pycache__',
 ]);
 
 /**
@@ -29,9 +29,9 @@ export const IGNORED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
  * ignored. These are expressed in normalized POSIX-style relative paths.
  */
 export const IGNORED_RELATIVE_DIRECTORIES: ReadonlySet<string> = new Set([
-  '.ai/out',
-  '.ai/scale',
-  '.ai/scale/state',
+    '.ai/out',
+    '.ai/scale',
+    '.ai/scale/state',
 ]);
 
 /**
@@ -41,11 +41,11 @@ export const IGNORED_RELATIVE_DIRECTORIES: ReadonlySet<string> = new Set([
  * modifying the original script.
  */
 export const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
-  '.7z', '.a', '.ai', '.avi', '.bin', '.bmp', '.class', '.dll', '.dmg', '.doc',
-  '.docx', '.eot', '.exe', '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lib',
-  '.lockb', '.mov', '.mp3', '.mp4', '.o', '.obj', '.otf', '.pdf', '.png', '.psd',
-  '.so', '.tar', '.tif', '.tiff', '.ttf', '.wav', '.webm', '.webp', '.woff', '.woff2',
-  '.xls', '.xlsx', '.zip',
+    '.7z', '.a', '.ai', '.avi', '.bin', '.bmp', '.class', '.dll', '.dmg', '.doc',
+    '.docx', '.eot', '.exe', '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lib',
+    '.lockb', '.mov', '.mp3', '.mp4', '.o', '.obj', '.otf', '.pdf', '.png', '.psd',
+    '.so', '.tar', '.tif', '.tiff', '.ttf', '.wav', '.webm', '.webp', '.woff', '.woff2',
+    '.xls', '.xlsx', '.zip',
 ]);
 
 /**
@@ -55,15 +55,15 @@ export const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
  * the original script.
  */
 export const GENERATED_FILE_PATTERNS: ReadonlyArray<RegExp> = [
-  /\.min\.[^.]+$/i,
-  /\.map$/i,
-  /package-lock\.json$/i,
-  /pnpm-lock\.ya?ml$/i,
-  /yarn\.lock$/i,
-  /composer\.lock$/i,
-  /diff\.diff$/i,
-  /Cargo\.lock$/i,
-  /poetry\.lock$/i,
+    /\.min\.[^.]+$/i,
+    /\.map$/i,
+    /package-lock\.json$/i,
+    /pnpm-lock\.ya?ml$/i,
+    /yarn\.lock$/i,
+    /composer\.lock$/i,
+    /diff\.diff$/i,
+    /Cargo\.lock$/i,
+    /poetry\.lock$/i,
 ];
 
 
@@ -76,8 +76,8 @@ export const CONFIG_EXTENSIONS: ReadonlySet<string> = new Set(['.json', '.jsonc'
 export const DATA_EXTENSIONS: ReadonlySet<string> = new Set(['.csv', '.tsv', '.sql']);
 export const SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set(['.sh', '.bash', '.ps1', '.bat', '.cmd']);
 export const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
-  '.c', '.cc', '.cpp', '.cs', '.css', '.go', '.h', '.hpp', '.html', '.java', '.js', '.jsx',
-  '.mjs', '.php', '.pl', '.py', '.rb', '.rs', '.scss', '.sass', '.ts', '.tsx', '.vue',
+    '.c', '.cc', '.cpp', '.cs', '.css', '.go', '.h', '.hpp', '.html', '.java', '.js', '.jsx',
+    '.mjs', '.php', '.pl', '.py', '.rb', '.rs', '.scss', '.sass', '.ts', '.tsx', '.vue',
 ]);
 
 export const TEST_HINTS: ReadonlyArray<string> = ['test', 'tests', 'spec', '__tests__', '.spec.', '.test.'];

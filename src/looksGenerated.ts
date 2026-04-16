@@ -5,6 +5,6 @@ import { GENERATED_FILE_PATTERNS } from './constants';
  * indexing.
  */
 export function looksGenerated(relativeFilePath: string): boolean {
-  return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(relativeFilePath));
+    return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(relativeFilePath));
 }
 

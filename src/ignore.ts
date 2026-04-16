@@ -8,15 +8,15 @@ import { IGNORED_DIRECTORY_NAMES, IGNORED_RELATIVE_DIRECTORIES } from './constan
  * and exact, case-sensitive matching against the configured set.
  */
 export function isUnderIgnoredRelativeDirectory(relativePath: string): boolean {
-  const normalized = relativePath === '.' ? '.' : relativePath.replace(/^\.\//, '');
+    const normalized = relativePath === '.' ? '.' : relativePath.replace(/^\.\//, '');
 
-  for (const ignoredDirectory of IGNORED_RELATIVE_DIRECTORIES) {
-    if (normalized === ignoredDirectory || normalized.startsWith(`${ignoredDirectory}/`)) {
-      return true;
+    for(const ignoredDirectory of IGNORED_RELATIVE_DIRECTORIES) {
+        if(normalized === ignoredDirectory || normalized.startsWith(`${ignoredDirectory}/`)) {
+            return true;
+        }
     }
-  }
 
-  return false;
+    return false;
 }
 
 /**
@@ -26,10 +26,10 @@ export function isUnderIgnoredRelativeDirectory(relativePath: string): boolean {
  * directory's project-relative path falls under an ignored relative directory.
  */
 export function shouldIgnoreDirectory(relativeDirectoryPath: string, directoryName: string): boolean {
-  if (IGNORED_DIRECTORY_NAMES.has(directoryName)) {
-    return true;
-  }
+    if(IGNORED_DIRECTORY_NAMES.has(directoryName)) {
+        return true;
+    }
 
-  return isUnderIgnoredRelativeDirectory(relativeDirectoryPath);
+    return isUnderIgnoredRelativeDirectory(relativeDirectoryPath);
 }
 

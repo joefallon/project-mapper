@@ -7,8 +7,8 @@ import path from 'node:path';
  * path is missing.
  */
 export async function removeDirectoryIfPresent(directoryPath: string): Promise<void> {
-  // Delegate to fs.rm with force+recursive to match original behavior.
-  await fs.rm(directoryPath, { recursive: true, force: true });
+    // Delegate to fs.rm with force+recursive to match original behavior.
+    await fs.rm(directoryPath, {recursive: true, force: true});
 }
 
 /**
@@ -16,7 +16,7 @@ export async function removeDirectoryIfPresent(directoryPath: string): Promise<v
  * function is easy to test. This mirrors project-map.mjs's ensureScaleDirectory.
  */
 export async function ensureScaleDirectory(scaleDir: string): Promise<void> {
-  await fs.mkdir(scaleDir, { recursive: true });
+    await fs.mkdir(scaleDir, {recursive: true});
 }
 
 /**
@@ -25,15 +25,15 @@ export async function ensureScaleDirectory(scaleDir: string): Promise<void> {
  * accepts the base path explicitly for testability.
  */
 export async function ensureStateDirectories(stateDir: string): Promise<void> {
-  const postingsDir = path.join(stateDir, 'postings');
-  const synopsesDir = path.join(stateDir, 'synopses');
-  const synopsesDirsDir = path.join(synopsesDir, 'dirs');
-  const synopsesFilesDir = path.join(synopsesDir, 'files');
-  const queriesDir = path.join(stateDir, 'queries');
+    const postingsDir = path.join(stateDir, 'postings');
+    const synopsesDir = path.join(stateDir, 'synopses');
+    const synopsesDirsDir = path.join(synopsesDir, 'dirs');
+    const synopsesFilesDir = path.join(synopsesDir, 'files');
+    const queriesDir = path.join(stateDir, 'queries');
 
-  await fs.mkdir(postingsDir, { recursive: true });
-  await fs.mkdir(synopsesDirsDir, { recursive: true });
-  await fs.mkdir(synopsesFilesDir, { recursive: true });
-  await fs.mkdir(queriesDir, { recursive: true });
+    await fs.mkdir(postingsDir, {recursive: true});
+    await fs.mkdir(synopsesDirsDir, {recursive: true});
+    await fs.mkdir(synopsesFilesDir, {recursive: true});
+    await fs.mkdir(queriesDir, {recursive: true});
 }
 

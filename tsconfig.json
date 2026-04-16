@@ -13,7 +13,8 @@
         "allowJs": true,
         "declaration": true,
         "types": [
-            "node"
+            "node",
+            "vitest"
         ]
     },
     "include": [

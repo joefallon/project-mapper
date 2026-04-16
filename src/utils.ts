@@ -9,7 +9,7 @@
  *
  * Returns: boolean - true when `value` is a string and trimming it yields length > 0.
  */
-  import path from 'path';
+import path from 'path';
 
 export function hasText(value: unknown): boolean {
     return typeof value === 'string' && value.trim().length > 0;

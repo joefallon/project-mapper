@@ -22,6 +22,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import {hasText, normalizeWhitespace} from "./src/utils.ts";
 
 /**
  * The current working directory is the project root.
@@ -657,38 +658,38 @@ const HTML_HEADING_PATTERN = /^\s*<h[1-6][^>]*>(.*?)<\/h[1-6]>\s*$/i;
 /**
  * Attempts to infer a title for a chunk boundary line.
  */
-function inferBoundaryTitle(lines, startIndex) {
-  const line = lines[startIndex] ?? '';
-  const markdownMatch = line.match(MARKDOWN_HEADING_PATTERN);
-
-  if (markdownMatch) {
-    return normalizeWhitespace(markdownMatch[1]);
-  }
-
-  const htmlMatch = line.match(HTML_HEADING_PATTERN);
-  if (htmlMatch) {
-    return normalizeWhitespace(htmlMatch[1]);
-  }
-
-  if (INI_SECTION_PATTERN.test(line)) {
-    return normalizeWhitespace(line.replace(/^\s*\[|\]\s*$/g, ''));
-  }
-
-  if (DELIMITER_PATTERN.test(line)) {
-    const previousLine = lines[startIndex - 1] ?? '';
-    if (hasText(previousLine)) {
-      return normalizeWhitespace(previousLine);
-    }
-  }
-
-  for (const pattern of DECLARATION_PATTERNS) {
-    if (pattern.test(line)) {
-      return normalizeWhitespace(line);
-    }
-  }
-
-  return '';
-}
+// function inferBoundaryTitle(lines, startIndex) {
+//   const line = lines[startIndex] ?? '';
+//   const markdownMatch = line.match(MARKDOWN_HEADING_PATTERN);
+//
+//   if (markdownMatch) {
+//     return normalizeWhitespace(markdownMatch[1]);
+//   }
+//
+//   const htmlMatch = line.match(HTML_HEADING_PATTERN);
+//   if (htmlMatch) {
+//     return normalizeWhitespace(htmlMatch[1]);
+//   }
+//
+//   if (INI_SECTION_PATTERN.test(line)) {
+//     return normalizeWhitespace(line.replace(/^\s*\[|\]\s*$/g, ''));
+//   }
+//
+//   if (DELIMITER_PATTERN.test(line)) {
+//     const previousLine = lines[startIndex - 1] ?? '';
+//     if (hasText(previousLine)) {
+//       return normalizeWhitespace(previousLine);
+//     }
+//   }
+//
+//   for (const pattern of DECLARATION_PATTERNS) {
+//     if (pattern.test(line)) {
+//       return normalizeWhitespace(line);
+//     }
+//   }
+//
+//   return '';
+// }
 
 /**
  * Attempts to infer a structural boundary kind.
@@ -938,27 +939,27 @@ function inferBoundaryTitle(lines, startIndex) {
 /**
  * Extracts lines that look like keys or labels.
  */
-function extractKeyLikeLines(lines, limit = 8) {
-  const results = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      continue;
-    }
-
-    if (/^[A-Za-z0-9 _.-]{2,60}:\s+/.test(trimmed) || /^[A-Za-z0-9_.-]+\s*=\s+/.test(trimmed)) {
-      results.push(truncate(trimmed, 160));
-    }
-
-    if (results.length >= limit) {
-      break;
-    }
-  }
-
-  return results;
-}
+// function extractKeyLikeLines(lines, limit = 8) {
+//   const results = [];
+//
+//   for (const line of lines) {
+//     const trimmed = line.trim();
+//
+//     if (!trimmed) {
+//       continue;
+//     }
+//
+//     if (/^[A-Za-z0-9 _.-]{2,60}:\s+/.test(trimmed) || /^[A-Za-z0-9_.-]+\s*=\s+/.test(trimmed)) {
+//       results.push(truncate(trimmed, 160));
+//     }
+//
+//     if (results.length >= limit) {
+//       break;
+//     }
+//   }
+//
+//   return results;
+// }
 
 /**
  * Extracts filename/path references from text where obvious.

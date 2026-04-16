@@ -6,7 +6,7 @@
  * return `undefined` for unsupported inputs (e.g. `undefined`).
  */
 export function prettyJson(value: unknown): string | undefined {
-  return JSON.stringify(value, null, 2);
+    return JSON.stringify(value, null, 2);
 }
 
 export default prettyJson;
