@@ -176,21 +176,26 @@ export async function runBuild(projectRoot?: string) {
 
     // 2) Ordered merge/finalization: deterministic aggregation, final chunk id assignment and postings
     const mergeStart = performance.now();
-    // Aggregate counters deterministically in discovered-file order
+
+    // Subphase 1: aggregate counters deterministically in discovered-file order
+    const counterAggStart = performance.now();
     for (const processed of processedFiles) {
         indexedTextFiles += processed.deltas.indexedTextFiles;
         skippedFiles += processed.deltas.skippedFiles;
         binaryFiles += processed.deltas.binaryFiles;
         generatedFiles += processed.deltas.generatedFiles;
     }
+    const counterAggElapsed = performance.now() - counterAggStart;
+    console.log(`counter aggregation work: ${counterAggElapsed.toFixed(1)} ms`);
 
-    // Finalize chunk ids in strict discovery order. This is the only place that uses the
+    // Subphase 2: finalize chunk ids in strict discovery order. This is the only place that uses the
     // global nextChunkId generator; it ensures deterministic global chunk ids while allowing
     // per-file processing to have used private/local temporary ids.
-    for(const processed of processedFiles) {
+    const chunkFinalizeStart = performance.now();
+    for (const processed of processedFiles) {
         // Map local -> final ids for this file
         const localToFinal: Record<string, string> = {};
-        for(const chunk of processed.chunkRecords) {
+        for (const chunk of processed.chunkRecords) {
             const finalId = nextChunkId();
             // record mapping and mutate the chunk record in-place
             localToFinal[chunk.chunk_id] = finalId;
@@ -200,20 +205,29 @@ export async function runBuild(projectRoot?: string) {
         }
 
         // Update fileRecord.chunk_ids to final ids (preserve order)
-        if(processed.fileRecord && Array.isArray(processed.fileRecord.chunk_ids)) {
+        if (processed.fileRecord && Array.isArray(processed.fileRecord.chunk_ids)) {
             processed.fileRecord = {
                 ...processed.fileRecord,
                 chunk_ids: processed.fileRecord.chunk_ids.map((id: string) => localToFinal[id] ?? id),
             };
         }
 
-        // Now that chunks are finalized for this file, add them to postings and add fileRecord
-        for(const chunk of processed.chunkRecords) {
-            addChunkToPostings(postings, chunk);
-        }
-
+        // Defer postings accumulation until all chunks have been finalized to allow a clean,
+        // separately timed pass over finalized chunks.
+        // Keep pushing fileRecords in discovery order to preserve final file ordering.
         fileRecords.push(processed.fileRecord);
     }
+    const chunkFinalizeElapsed = performance.now() - chunkFinalizeStart;
+    console.log(`chunk finalization work: ${chunkFinalizeElapsed.toFixed(1)} ms`);
+
+    // Subphase 3: add finalized chunks to postings in final chunk order
+    const postingsAccumStart = performance.now();
+    for (const chunk of chunkRecords) {
+        addChunkToPostings(postings, chunk);
+    }
+    const postingsAccumElapsed = performance.now() - postingsAccumStart;
+    console.log(`postings accumulation work: ${postingsAccumElapsed.toFixed(1)} ms`);
+
     const mergeElapsed = performance.now() - mergeStart;
     console.log(`merge/postings work: ${mergeElapsed.toFixed(1)} ms`);
 
@@ -303,7 +317,7 @@ export async function runBuild(projectRoot?: string) {
     // repo-level and per-dir/file synopses
     const synopsisStart = performance.now();
     await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
-    // Write per-directory synopses with bounded concurrency — these writes are
+    // Write per-directory synopses with bounded concurrency - these writes are
     // independent and safe to parallelize. Use the local mapWithConcurrency
     // helper and the previously computed CONCURRENCY value.
     await mapWithConcurrency(directoryRecords, async (directoryRecord) => {
