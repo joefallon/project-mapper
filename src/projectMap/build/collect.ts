@@ -150,7 +150,18 @@ export async function runBuild(projectRoot?: string) {
         fileRecord: any;
         chunkRecords: any[];
         deltas: { indexedTextFiles: number; skippedFiles: number; binaryFiles: number; generatedFiles: number };
-        timings: { metadataMs: number; readMs: number; chunkMs: number; recordMs: number };
+        timings: {
+            metadataMs: number;
+            readMs: number;
+            chunkMs: number;
+            recordMs: number;
+            path: string;
+            sizeBytes: number;
+            indexed: boolean;
+            fileClass: string;
+            chunkCount: number;
+            totalMs: number;
+        };
     }> = [];
 
     // Assign deterministic file ids in discovery order before doing any async work
@@ -181,7 +192,7 @@ export async function runBuild(projectRoot?: string) {
 
     // Aggregate worker timings from per-file results (console-only)
     const workerTotals = processedFiles.reduce((acc, pf) => {
-        const t = pf.timings || {metadataMs: 0, readMs: 0, chunkMs: 0, recordMs: 0};
+        const t = pf.timings || {metadataMs: 0, readMs: 0, chunkMs: 0, recordMs: 0, path: '', sizeBytes: 0, indexed: false, fileClass: '', chunkCount: 0, totalMs: 0};
         acc.metadataMs += t.metadataMs;
         acc.readMs += t.readMs;
         acc.chunkMs += t.chunkMs;
@@ -190,6 +201,71 @@ export async function runBuild(projectRoot?: string) {
     }, {metadataMs: 0, readMs: 0, chunkMs: 0, recordMs: 0});
 
     console.log(`file worker totals: metadata=${workerTotals.metadataMs.toFixed(1)} ms read=${workerTotals.readMs.toFixed(1)} ms chunk=${workerTotals.chunkMs.toFixed(1)} ms record=${workerTotals.recordMs.toFixed(1)} ms`);
+
+    // Console-only: print top slow files by chunking and by total worker time.
+    const TOP_SLOW_FILE_DIAGNOSTIC_LIMIT = 20;
+
+    const diagnostics = processedFiles.map((pf) => pf.timings);
+
+    // Chunking sorted: chunkMs desc, totalMs desc, path asc
+    const chunkingTop = diagnostics
+        .map((t) => ({
+            path: String(t.path || ''),
+            sizeBytes: Number(t.sizeBytes || 0),
+            indexed: Boolean(t.indexed),
+            fileClass: String(t.fileClass || ''),
+            chunkCount: Number(t.chunkCount || 0),
+            metadataMs: Number(t.metadataMs || 0),
+            readMs: Number(t.readMs || 0),
+            chunkMs: Number(t.chunkMs || 0),
+            recordMs: Number(t.recordMs || 0),
+            totalMs: Number(t.totalMs || 0),
+        }))
+        .sort((a, b) => {
+            const d = b.chunkMs - a.chunkMs;
+            if (d !== 0) return d;
+            const d2 = b.totalMs - a.totalMs;
+            if (d2 !== 0) return d2;
+            return a.path.localeCompare(b.path);
+        })
+        .slice(0, TOP_SLOW_FILE_DIAGNOSTIC_LIMIT);
+
+    if (chunkingTop.length > 0) {
+        console.log('TOP SLOW FILES BY CHUNKING');
+        for (const entry of chunkingTop) {
+            console.log(`- ${entry.chunkMs.toFixed(1)} ms chunk | ${entry.chunkCount} chunks | ${entry.sizeBytes} bytes | ${entry.path}`);
+        }
+    }
+
+    // Worker-time sorted: totalMs desc, chunkMs desc, path asc
+    const workerTop = diagnostics
+        .map((t) => ({
+            path: String(t.path || ''),
+            sizeBytes: Number(t.sizeBytes || 0),
+            indexed: Boolean(t.indexed),
+            fileClass: String(t.fileClass || ''),
+            chunkCount: Number(t.chunkCount || 0),
+            metadataMs: Number(t.metadataMs || 0),
+            readMs: Number(t.readMs || 0),
+            chunkMs: Number(t.chunkMs || 0),
+            recordMs: Number(t.recordMs || 0),
+            totalMs: Number(t.totalMs || 0),
+        }))
+        .sort((a, b) => {
+            const d = b.totalMs - a.totalMs;
+            if (d !== 0) return d;
+            const d2 = b.chunkMs - a.chunkMs;
+            if (d2 !== 0) return d2;
+            return a.path.localeCompare(b.path);
+        })
+        .slice(0, TOP_SLOW_FILE_DIAGNOSTIC_LIMIT);
+
+    if (workerTop.length > 0) {
+        console.log('TOP SLOW FILES BY WORKER TIME');
+        for (const entry of workerTop) {
+            console.log(`- ${entry.totalMs.toFixed(1)} ms total | metadata=${entry.metadataMs.toFixed(1)} read=${entry.readMs.toFixed(1)} chunk=${entry.chunkMs.toFixed(1)} record=${entry.recordMs.toFixed(1)} ms | ${entry.chunkCount} chunks | ${entry.sizeBytes} bytes | ${entry.path}`);
+        }
+    }
 
     // 2) Ordered merge/finalization: deterministic aggregation, final chunk id assignment and postings
     const mergeStart = performance.now();
@@ -368,12 +444,22 @@ interface ProcessedBuildFile {
         binaryFiles: number;
         generatedFiles: number;
     };
-    // Console-only aggregated timing for per-file worker phases. Not persisted.
+    // Console-only aggregated timing + non-persisted diagnostics for per-file worker phases.
+    // These fields are intentionally NOT written into persisted file or chunk records.
     timings: {
+        // per-phase timings
         metadataMs: number;
         readMs: number;
         chunkMs: number;
         recordMs: number;
+        // diagnostics
+        path: string;
+        sizeBytes: number;
+        indexed: boolean;
+        fileClass: string;
+        chunkCount: number;
+        // convenience
+        totalMs: number;
     };
 }
 
@@ -412,7 +498,23 @@ async function processDiscoveredFileForBuild(opts: {
             skipReason:       'binary-or-asset',
         });
         recordMs = performance.now() - recStart;
-        return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
+        return {
+            fileRecord,
+            chunkRecords,
+            deltas,
+            timings: {
+                metadataMs,
+                readMs,
+                chunkMs,
+                recordMs,
+                path: discoveredFile.relative_path,
+                sizeBytes: stats.size,
+                indexed: false,
+                fileClass,
+                chunkCount: 0,
+                totalMs: metadataMs + readMs + chunkMs + recordMs,
+            },
+        };
     }
 
     if(fileClass === 'generated') {
@@ -429,7 +531,23 @@ async function processDiscoveredFileForBuild(opts: {
             skipReason:       'generated-noise',
         });
         recordMs = performance.now() - recStart;
-        return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
+        return {
+            fileRecord,
+            chunkRecords,
+            deltas,
+            timings: {
+                metadataMs,
+                readMs,
+                chunkMs,
+                recordMs,
+                path: discoveredFile.relative_path,
+                sizeBytes: stats.size,
+                indexed: false,
+                fileClass,
+                chunkCount: 0,
+                totalMs: metadataMs + readMs + chunkMs + recordMs,
+            },
+        };
     }
 
     const readStart = performance.now();
@@ -474,7 +592,24 @@ async function processDiscoveredFileForBuild(opts: {
     recordMs = performance.now() - recStart;
 
     deltas.indexedTextFiles = 1;
-    return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
+    const chunkCount = chunkRecords.length;
+    return {
+        fileRecord,
+        chunkRecords,
+        deltas,
+        timings: {
+            metadataMs,
+            readMs,
+            chunkMs,
+            recordMs,
+            path: discoveredFile.relative_path,
+            sizeBytes: stats.size,
+            indexed: true,
+            fileClass,
+            chunkCount,
+            totalMs: metadataMs + readMs + chunkMs + recordMs,
+        },
+    };
 }
 
 function printBuildSummary(buildInfo: any, repoSynopsis: any, totalMs?: number) {
