@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'path';
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT } from '../constants';
+import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT, DEFAULT_MAX_INDEXABLE_LINE_LENGTH } from '../constants';
 import { shouldIgnoreDirectory } from '../../ignore';
-import { toRelativeProjectPath } from '../../utils';
+import { toRelativeProjectPath, hasLineLongerThan } from '../../utils';
 import {
     ensureScaleDirectory,
     removeDirectoryIfPresent,
@@ -553,6 +553,39 @@ async function processDiscoveredFileForBuild(opts: {
     const readStart = performance.now();
     const text = await fs.readFile(discoveredFile.absolute_path, 'utf8');
     readMs = performance.now() - readStart;
+    // Skip pathologically long-line or minified files early to avoid creating
+    // huge chunks and consuming excessive CPU/memory during chunking.
+    if (hasLineLongerThan(text, DEFAULT_MAX_INDEXABLE_LINE_LENGTH)) {
+        deltas.skippedFiles = 1;
+        const recStartLongLine = performance.now();
+        fileRecord = buildSkippedFileRecord({
+            fileId,
+            relativeFilePath: discoveredFile.relative_path,
+            extension,
+            sizeBytes:        stats.size,
+            mtimeMs:          stats.mtimeMs,
+            fileClass,
+            skipReason:       'minified-or-long-line',
+        });
+        recordMs = performance.now() - recStartLongLine;
+        return {
+            fileRecord,
+            chunkRecords,
+            deltas,
+            timings: {
+                metadataMs,
+                readMs,
+                chunkMs,
+                recordMs,
+                path: discoveredFile.relative_path,
+                sizeBytes: stats.size,
+                indexed: false,
+                fileClass,
+                chunkCount: 0,
+                totalMs: metadataMs + readMs + chunkMs + recordMs,
+            },
+        };
+    }
     // Use a local (per-file) temporary chunk id generator so per-file processing
     // doesn't rely on any shared global counter. These local ids will be
     // replaced later in runBuild(). The prefix 'local-c' is intentionally

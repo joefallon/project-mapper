@@ -273,6 +273,32 @@ export function buildPreviewFromLines(lines: string[], maxLines = 3, maxLength =
 }
 
 /**
+ * Return true if any line in `text` exceeds `maxLength` characters.
+ *
+ * Implementation is a single-pass scanner that counts characters between
+ * newline boundaries without allocating intermediate arrays. It treats both
+ * LF and CR as line delimiters and is intentionally conservative/fast.
+ */
+export function hasLineLongerThan(text: string, maxLength: number): boolean {
+    if (!text) return false;
+    let run = 0;
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        // LF (\n) or CR (\r) are line breaks
+        if (code === 10 || code === 13) {
+            if (run > maxLength) return true;
+            run = 0;
+            continue;
+        }
+        run += 1;
+        if (run > maxLength) return true;
+    }
+    // final line
+    if (run > maxLength) return true;
+    return false;
+}
+
+/**
  * Extract quoted substrings from text (single, double, or backtick quotes).
  *
  * - Only captures quoted parts between 3 and 120 characters long and avoids

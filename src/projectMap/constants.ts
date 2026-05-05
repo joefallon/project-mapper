@@ -53,3 +53,8 @@ export const PROJECT_MAP_VERSION = '1.0.0';
 // build collector to clamp the detected available parallelism.
 export const DEFAULT_BUILD_CONCURRENCY_LIMIT = 8;
 
+// Maximum allowed line length for a text file to be considered indexable.
+// Files containing any line longer than this threshold will be skipped as
+// minified-or-long-line to avoid producing huge, unhelpful chunks.
+export const DEFAULT_MAX_INDEXABLE_LINE_LENGTH = 2000;
+
