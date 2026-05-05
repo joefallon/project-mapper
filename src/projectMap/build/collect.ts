@@ -388,41 +388,58 @@ export async function runBuild(projectRoot?: string) {
     const processingElapsed = fileProcessingElapsed + mergeElapsed + summaryElapsed;
     console.log(`processed files: indexed=${indexedTextFiles} skipped=${skippedFiles} chunks=${chunkRecords.length} (${processingElapsed.toFixed(1)} ms)`);
 
-    // Persist core state with subphase timings
+    // Persist core state, postings and synopses. These groups are independent
+    // and can be written concurrently. Directory creation already occurred
+    // earlier via ensureStateDirectories(paths) so writes can proceed.
     console.log('writing state...');
     const writeStart = performance.now();
 
-    const coreStart = performance.now();
-    await writeJson(path.join(paths.STATE_DIR, 'build.json'), buildInfo);
-    await writeJson(path.join(paths.STATE_DIR, 'repo.json'), repoSynopsis);
-    await writeJsonLines(path.join(paths.STATE_DIR, 'dirs.jsonl'), directoryRecords);
-    await writeJsonLines(path.join(paths.STATE_DIR, 'files.jsonl'), fileRecords);
-    await writeJsonLines(path.join(paths.STATE_DIR, 'chunks.jsonl'), chunkRecords);
-    const coreElapsed = performance.now() - coreStart;
-    console.log(`core state write: ${coreElapsed.toFixed(1)} ms`);
+    // Core state write group
+    const corePromise = (async () => {
+        const coreStart = performance.now();
+        await writeJson(path.join(paths.STATE_DIR, 'build.json'), buildInfo);
+        await writeJson(path.join(paths.STATE_DIR, 'repo.json'), repoSynopsis);
+        await writeJsonLines(path.join(paths.STATE_DIR, 'dirs.jsonl'), directoryRecords);
+        await writeJsonLines(path.join(paths.STATE_DIR, 'files.jsonl'), fileRecords);
+        await writeJsonLines(path.join(paths.STATE_DIR, 'chunks.jsonl'), chunkRecords);
+        const coreElapsed = performance.now() - coreStart;
+        console.log(`core state write: ${coreElapsed.toFixed(1)} ms`);
+        return coreElapsed;
+    })();
 
-    // Persist postings
-    const postingsStart = performance.now();
-    await persistPostings(postings, paths.POSTINGS_DIR);
-    const postingsElapsed = performance.now() - postingsStart;
-    console.log(`postings write: ${postingsElapsed.toFixed(1)} ms`);
+    // Postings write group
+    const postingsPromise = (async () => {
+        const postingsStart = performance.now();
+        await persistPostings(postings, paths.POSTINGS_DIR);
+        const postingsElapsed = performance.now() - postingsStart;
+        console.log(`postings write: ${postingsElapsed.toFixed(1)} ms`);
+        return postingsElapsed;
+    })();
 
-    // repo-level and per-dir/file synopses
-    const synopsisStart = performance.now();
-    await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
-    // Write per-directory synopses with bounded concurrency - these writes are
-    // independent and safe to parallelize. Use the local mapWithConcurrency
-    // helper and the previously computed CONCURRENCY value.
-    await mapWithConcurrency(directoryRecords, async (directoryRecord) => {
-        return writeJson(path.join(paths.SYNOPSES_DIRS_DIR, `${directoryRecord.dir_id}.json`), directoryRecord);
-    }, CONCURRENCY);
+    // Synopsis write group (repo + per-dir + per-file synopses)
+    const synopsisPromise = (async () => {
+        const synopsisStart = performance.now();
+        await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
+        // Write per-directory synopses with bounded concurrency - these writes are
+        // independent and safe to parallelize. Use the local mapWithConcurrency
+        // helper and the previously computed CONCURRENCY value.
+        await mapWithConcurrency(directoryRecords, async (directoryRecord) => {
+            return writeJson(path.join(paths.SYNOPSES_DIRS_DIR, `${directoryRecord.dir_id}.json`), directoryRecord);
+        }, CONCURRENCY);
 
-    // Write per-file synopses with bounded concurrency as well.
-    await mapWithConcurrency(fileRecords, async (fileRecord) => {
-        return writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
-    }, CONCURRENCY);
-    const synopsisElapsed = performance.now() - synopsisStart;
-    console.log(`synopsis write: ${synopsisElapsed.toFixed(1)} ms`);
+        // Write per-file synopses with bounded concurrency as well.
+        await mapWithConcurrency(fileRecords, async (fileRecord) => {
+            return writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
+        }, CONCURRENCY);
+        const synopsisElapsed = performance.now() - synopsisStart;
+        console.log(`synopsis write: ${synopsisElapsed.toFixed(1)} ms`);
+        return synopsisElapsed;
+    })();
+
+    // Await all top-level write groups concurrently. Individual group timings
+    // are printed by each group. The total elapsed will typically be less than
+    // the sum of group timings after parallelization.
+    await Promise.all([corePromise, postingsPromise, synopsisPromise]);
 
     const writeElapsed = performance.now() - writeStart;
     console.log(`wrote state (${writeElapsed.toFixed(1)} ms)`);
