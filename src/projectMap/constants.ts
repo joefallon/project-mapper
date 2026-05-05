@@ -48,3 +48,8 @@ export function getPaths(projectRoot?: string) {
 // Small version marker used in persisted state
 export const PROJECT_MAP_VERSION = '1.0.0';
 
+// Maximum allowed concurrency for project-map build per-file processing. This is
+// a conservative cap to avoid overloading a developer machine. It is used by the
+// build collector to clamp the detected available parallelism.
+export const DEFAULT_BUILD_CONCURRENCY_LIMIT = 8;
+

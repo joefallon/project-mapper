@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'path';
-import { getPaths, PROJECT_MAP_VERSION } from '../constants';
+import os from 'node:os';
+import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT } from '../constants';
 import { shouldIgnoreDirectory } from '../../ignore';
 import { toRelativeProjectPath } from '../../utils';
 import {
@@ -89,26 +90,78 @@ export async function runBuild(projectRoot?: string) {
         return `c${String(chunkCounter).padStart(7, '0')}`;
     };
 
-    // Process files serially but with local (per-file) chunk ids. We'll finalize global
-    // chunk ids in a separate ordered step below to make per-file processing safe for
-    // future concurrency.
+    // Small helper: map with a bounded concurrency level while preserving input order
+    // - preserves result ordering (results[i] corresponds to items[i])
+    // - limits number of concurrently-running workers
+    // - rejects immediately if any worker rejects
+    async function mapWithConcurrency<T, R>(
+        items: T[],
+        worker: (item: T, index: number) => Promise<R>,
+        concurrency: number
+    ): Promise<R[]> {
+        const results: R[] = new Array(items.length);
+        let nextIndex = 0;
+        let active = 0;
+
+        return await new Promise<R[]>((resolve, reject) => {
+            function launch() {
+                if (nextIndex >= items.length && active === 0) {
+                    resolve(results);
+                    return;
+                }
+
+                while (active < concurrency && nextIndex < items.length) {
+                    const idx = nextIndex++;
+                    active += 1;
+
+                    Promise.resolve()
+                        .then(() => worker(items[idx], idx))
+                        .then((res) => {
+                            results[idx] = res;
+                            active -= 1;
+                            launch();
+                        })
+                        .catch((err) => reject(err));
+                }
+            }
+
+            launch();
+        });
+    }
+
+    // Process files concurrently with local (per-file) chunk ids, but preserve
+    // deterministic ordering by:
+    // 1) assigning file ids in discovered-file order before launching work
+    // 2) running per-file processing with bounded concurrency
+    // 3) collecting results in input order and performing the final merge in that order
     const processedFiles: Array<{
         fileRecord: any;
         chunkRecords: any[];
         deltas: { indexedTextFiles: number; skippedFiles: number; binaryFiles: number; generatedFiles: number };
     }> = [];
 
-    for(const discoveredFile of discoveredFiles) {
-        const fileId = nextFileId();
-        const processed = await processDiscoveredFileForBuild({
+    // Assign deterministic file ids in discovery order before doing any async work
+    const fileIds = discoveredFiles.map(() => nextFileId());
+
+    // Determine concurrency conservatively
+    const available = typeof (os as any).availableParallelism === 'function'
+        ? (os as any).availableParallelism()
+        : os.cpus().length;
+    const CONCURRENCY = Math.max(1, Math.min(DEFAULT_BUILD_CONCURRENCY_LIMIT, Number(available) || 1));
+
+    const worker = (discoveredFile: { absolute_path: string; relative_path: string }, index: number) => {
+        return processDiscoveredFileForBuild({
             discoveredFile,
-            fileId,
+            fileId: fileIds[index],
             knownBasenamesSet,
         });
+    };
 
-        processedFiles.push(processed);
+    const results = await mapWithConcurrency(discoveredFiles, worker, CONCURRENCY);
+    for (const r of results) processedFiles.push(r);
 
-        // Update counters
+    // Aggregate counters deterministically in discovered-file order
+    for (const processed of processedFiles) {
         indexedTextFiles += processed.deltas.indexedTextFiles;
         skippedFiles += processed.deltas.skippedFiles;
         binaryFiles += processed.deltas.binaryFiles;
