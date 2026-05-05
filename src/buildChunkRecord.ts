@@ -5,6 +5,7 @@ import {
     topTermsFromCounts,
     extractQuotedStrings
 } from './utils';
+import { setChunkTermCounts } from './projectMap/build/termCountsCache';
 import { performance } from 'perf_hooks';
 import { extractIdentifiers } from './text/identifiers';
 import { extractKeyLikeLines } from './extractKeyLikeLines';
@@ -127,7 +128,7 @@ export function buildChunkRecord({
         console.log('=== END SLOW BUILD CHUNK RECORD ===\n');
     }
 
-    return {
+    const out: ChunkRecord = {
         chunk_id:         chunkId,
         file_id:          fileId,
         path:             relativeFilePath,
@@ -144,5 +145,17 @@ export function buildChunkRecord({
         quoted_strings:   quotedStrings,
         referenced_paths: referencedPaths,
     };
+
+    // Attach transient termCounts to the chunk record so downstream postings
+    // accumulation can reuse the token counts without recomputing. This is
+    // intentionally transient (symbol-keyed) and will not be persisted.
+    try {
+        setChunkTermCounts(out, termCounts);
+    } catch (e) {
+        // Defensive: if setting the transient cache fails for any reason we
+        // continue without breaking chunk construction.
+    }
+
+    return out;
 }
 

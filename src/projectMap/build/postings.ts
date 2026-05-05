@@ -1,5 +1,6 @@
 import { PostingsAccumulator } from '../types';
 import { countTokenizedTerms, bucketForTerm } from '../../utils';
+import { getChunkTermCounts } from './termCountsCache';
 import { writeJson } from '../io';
 import path from 'path';
 
@@ -8,7 +9,11 @@ export function createPostingsAccumulator(): PostingsAccumulator {
 }
 
 export function addChunkToPostings(postings: PostingsAccumulator, chunkRecord: any) {
-    const fullCounts = countTokenizedTerms(chunkRecord.text);
+    // Prefer using transient precomputed counts when available to avoid a
+    // second full tokenization pass over the chunk text. Fall back to
+    // recomputing from text for callers that don't have the transient cache.
+    const cached = getChunkTermCounts(chunkRecord);
+    const fullCounts = cached ?? countTokenizedTerms(chunkRecord.text);
 
     for(const [term, tf] of fullCounts.entries()) {
         const bucket = bucketForTerm(term);
