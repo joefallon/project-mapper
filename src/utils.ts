@@ -15,7 +15,6 @@ export function hasText(value: unknown): boolean {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
-// ...existing code...
 
 // Module-level compiled regexes and small caches used on the chunking hot path.
 const TOKEN_RE = /[A-Za-z0-9][A-Za-z0-9._:/-]*/g;

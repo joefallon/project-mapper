@@ -116,5 +116,42 @@ describe('utils', () => {
         // should be normalized to posix separators
         expect(rel).toBe('sub/file.txt');
     });
-});
 
+    describe('tokenizeText output is unchanged for camel/separator/edge cases', () => {
+        it('preserves output for SalesOrderView', () => {
+            expect(tokenizeText('SalesOrderView')).toEqual([
+                'salesorderview', 'salesorderview', 'sales', 'order', 'view'
+            ]);
+        });
+        it('preserves output for XMLHttpRequest', () => {
+            expect(tokenizeText('XMLHttpRequest')).toEqual([
+                'xmlhttprequest', 'xmlhttprequest', 'xml', 'http', 'request'
+            ]);
+        });
+        it('preserves output for XMLHTTP', () => {
+            expect(tokenizeText('XMLHTTP')).toEqual([
+                'xmlhttp', 'xmlhttp', 'xmlhttp'
+            ]);
+        });
+        it('preserves output for get_sales-order', () => {
+            expect(tokenizeText('get_sales-order')).toEqual([
+                'get_sales-order', 'get', 'get', 'sales', 'sales', 'order', 'order'
+            ]);
+        });
+        it('preserves output for lowercase and numeric terms', () => {
+            expect(tokenizeText('foo bar 1234')).toEqual([
+                'foo', 'foo', 'foo', 'bar', 'bar', 'bar', '1234', '1234', '1234'
+            ]);
+        });
+        it('preserves output for separator-heavy tokens', () => {
+            expect(tokenizeText('foo/bar_baz-qux')).toEqual([
+                'foo/bar_baz-qux', 'foo', 'foo', 'bar', 'bar', 'baz', 'baz', 'qux', 'qux'
+            ]);
+        });
+        it('preserves output for adjacent separators', () => {
+            expect(tokenizeText('foo--bar__baz')).toEqual([
+                'foo--bar__baz', 'foo', 'foo', 'bar', 'bar', 'baz', 'baz'
+            ]);
+        });
+    });
+});
