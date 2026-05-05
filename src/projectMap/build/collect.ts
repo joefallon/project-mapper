@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'path';
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT, DEFAULT_MAX_INDEXABLE_LINE_LENGTH } from '../constants';
+import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT, DEFAULT_BUILD_WRITE_CONCURRENCY_LIMIT, DEFAULT_MAX_INDEXABLE_LINE_LENGTH } from '../constants';
 import { shouldIgnoreDirectory } from '../../ignore';
 import { toRelativeProjectPath, hasLineLongerThan } from '../../utils';
 import {
@@ -172,6 +172,10 @@ export async function runBuild(projectRoot?: string) {
         ? (os as any).availableParallelism()
         : os.cpus().length;
     const CONCURRENCY = Math.max(1, Math.min(DEFAULT_BUILD_CONCURRENCY_LIMIT, Number(available) || 1));
+    // Write concurrency is a separate bounded limit used for independent I/O-heavy
+    // synopsis writes (per-dir and per-file). Keep this as a fixed, positive
+    // bound so write-phase parallelism can be larger than CPU-bound processing.
+    const WRITE_CONCURRENCY = DEFAULT_BUILD_WRITE_CONCURRENCY_LIMIT;
 
     const worker = (discoveredFile: { absolute_path: string; relative_path: string }, index: number) => {
         return processDiscoveredFileForBuild({
@@ -391,7 +395,7 @@ export async function runBuild(projectRoot?: string) {
     // Persist core state, postings and synopses. These groups are independent
     // and can be written concurrently. Directory creation already occurred
     // earlier via ensureStateDirectories(paths) so writes can proceed.
-    console.log('writing state...');
+    console.log(`writing state... (writeConcurrency=${WRITE_CONCURRENCY})`);
     const writeStart = performance.now();
 
     // Core state write group
@@ -421,18 +425,18 @@ export async function runBuild(projectRoot?: string) {
         const synopsisStart = performance.now();
         await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
         // Write per-directory synopses with bounded concurrency - these writes are
-        // independent and safe to parallelize. Use the local mapWithConcurrency
-        // helper and the previously computed CONCURRENCY value.
+        // independent and safe to parallelize. Use a separate write concurrency
+        // value so I/O can proceed at a higher parallelism than CPU-bound work.
         await mapWithConcurrency(directoryRecords, async (directoryRecord) => {
             return writeJson(path.join(paths.SYNOPSES_DIRS_DIR, `${directoryRecord.dir_id}.json`), directoryRecord);
-        }, CONCURRENCY);
+        }, WRITE_CONCURRENCY);
 
-        // Write per-file synopses with bounded concurrency as well.
+        // Write per-file synopses with bounded concurrency as well (use WRITE_CONCURRENCY).
         await mapWithConcurrency(fileRecords, async (fileRecord) => {
             return writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
-        }, CONCURRENCY);
+        }, WRITE_CONCURRENCY);
         const synopsisElapsed = performance.now() - synopsisStart;
-        console.log(`synopsis write: ${synopsisElapsed.toFixed(1)} ms`);
+        console.log(`synopsis write: ${synopsisElapsed.toFixed(1)} ms (writeConcurrency=${WRITE_CONCURRENCY})`);
         return synopsisElapsed;
     })();
 

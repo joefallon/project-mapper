@@ -53,6 +53,12 @@ export const PROJECT_MAP_VERSION = '1.0.0';
 // build collector to clamp the detected available parallelism.
 export const DEFAULT_BUILD_CONCURRENCY_LIMIT = 8;
 
+// Maximum allowed concurrency specifically for build write operations that are
+// I/O-bound and independent (for example per-file/per-directory synopsis writes).
+// This is intentionally higher than DEFAULT_BUILD_CONCURRENCY_LIMIT because
+// these operations are not CPU-bound. Keep this conservative and bounded.
+export const DEFAULT_BUILD_WRITE_CONCURRENCY_LIMIT = 32;
+
 // Maximum allowed line length for a text file to be considered indexable.
 // Files containing any line longer than this threshold will be skipped as
 // minified-or-long-line to avoid producing huge, unhelpful chunks.
