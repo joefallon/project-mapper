@@ -282,13 +282,17 @@ export async function runBuild(projectRoot?: string) {
 
     // repo-level and per-dir/file synopses
     await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
-    for(const directoryRecord of directoryRecords) {
-        await writeJson(path.join(paths.SYNOPSES_DIRS_DIR, `${directoryRecord.dir_id}.json`), directoryRecord);
-    }
+    // Write per-directory synopses with bounded concurrency — these writes are
+    // independent and safe to parallelize. Use the local mapWithConcurrency
+    // helper and the previously computed CONCURRENCY value.
+    await mapWithConcurrency(directoryRecords, async (directoryRecord) => {
+        return writeJson(path.join(paths.SYNOPSES_DIRS_DIR, `${directoryRecord.dir_id}.json`), directoryRecord);
+    }, CONCURRENCY);
 
-    for(const fileRecord of fileRecords) {
-        await writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
-    }
+    // Write per-file synopses with bounded concurrency as well.
+    await mapWithConcurrency(fileRecords, async (fileRecord) => {
+        return writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
+    }, CONCURRENCY);
     const writeElapsed = performance.now() - writeStart;
     console.log(`wrote state (${writeElapsed.toFixed(1)} ms)`);
 
