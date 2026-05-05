@@ -23,7 +23,7 @@ const SEP_RE = /[._:/-]+/;
 const TRIM_PUNCT_RE = /^[-_.:\/]+|[-_.:\/]+$/g;
 
 // Simple bounded cache for normalizeTerm to avoid unbounded memory growth.
-const NORMALIZE_TERM_CACHE_LIMIT = 50000;
+const NORMALIZE_TERM_CACHE_LIMIT = 100000;
 const normalizeTermCache = new Map<string, string>();
 // minimal stopword set allocated once
 const STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'to']);
@@ -332,17 +332,21 @@ export function tokenizeText(text: string): string[] {
             output.push(base);
         }
 
-        const separatorParts = rawToken.split(SEP_RE).filter(Boolean);
-        for(const separatorPart of separatorParts) {
+        for (const separatorPart of rawToken.split(SEP_RE)) {
+            // skip empty parts produced by adjacent separators; this avoids an
+            // intermediate filtered array allocation while preserving exact
+            // iteration order and behavior of the previous implementation.
+            if (!separatorPart) continue;
+
             const normalizedPart = normalizeTerm(separatorPart);
-            if(isUsefulTerm(normalizedPart)) {
+            if (isUsefulTerm(normalizedPart)) {
                 output.push(normalizedPart);
             }
 
             const camelParts = splitCamelCase(separatorPart);
-            for(const camelPart of camelParts) {
+            for (const camelPart of camelParts) {
                 const normalizedCamelPart = normalizeTerm(camelPart);
-                if(isUsefulTerm(normalizedCamelPart)) {
+                if (isUsefulTerm(normalizedCamelPart)) {
                     output.push(normalizedCamelPart);
                 }
             }
