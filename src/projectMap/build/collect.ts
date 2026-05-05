@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'path';
 import os from 'node:os';
+import { performance } from 'node:perf_hooks';
 import { getPaths, PROJECT_MAP_VERSION, DEFAULT_BUILD_CONCURRENCY_LIMIT } from '../constants';
 import { shouldIgnoreDirectory } from '../../ignore';
 import { toRelativeProjectPath } from '../../utils';
@@ -58,6 +59,9 @@ export async function collectProjectFiles(projectRoot?: string) {
 
 export async function runBuild(projectRoot?: string) {
     const paths = getPaths(projectRoot);
+    const overallStart = performance.now();
+    console.log('PROJECT MAP BUILD STARTED');
+    console.log(`project_root: ${paths.PROJECT_ROOT}`);
     // ensure .ai/scale exists
     await ensureScaleDirectory(paths.AI_DIR);
 
@@ -66,7 +70,11 @@ export async function runBuild(projectRoot?: string) {
     await ensureStateDirectories(paths);
 
     const buildStartedAt = new Date().toISOString();
+    console.log('discovering files...');
+    const discoveryStart = performance.now();
     const discoveredFiles = await collectProjectFiles(projectRoot);
+    const discoveryElapsed = performance.now() - discoveryStart;
+    console.log(`discovered_files: ${discoveredFiles.length} (${discoveryElapsed.toFixed(1)} ms)`);
     const knownBasenamesSet = buildKnownBasenamesSet(discoveredFiles.map((file) => file.relative_path));
 
     const fileRecords: any[] = [];
@@ -157,6 +165,8 @@ export async function runBuild(projectRoot?: string) {
         });
     };
 
+    console.log(`processing files: ${discoveredFiles.length} (concurrency=${CONCURRENCY})...`);
+    const processingStart = performance.now();
     const results = await mapWithConcurrency(discoveredFiles, worker, CONCURRENCY);
     for (const r of results) processedFiles.push(r);
 
@@ -198,6 +208,9 @@ export async function runBuild(projectRoot?: string) {
 
         fileRecords.push(processed.fileRecord);
     }
+
+    const processingElapsed = performance.now() - processingStart;
+    console.log(`processed files: indexed=${indexedTextFiles} skipped=${skippedFiles} chunks=${chunkRecords.length} (${processingElapsed.toFixed(1)} ms)`);
 
     const directoryRecords = buildDirectoryRecords(fileRecords);
 
@@ -256,6 +269,8 @@ export async function runBuild(projectRoot?: string) {
     };
 
     // Persist core state
+    console.log('writing state...');
+    const writeStart = performance.now();
     await writeJson(path.join(paths.STATE_DIR, 'build.json'), buildInfo);
     await writeJson(path.join(paths.STATE_DIR, 'repo.json'), repoSynopsis);
     await writeJsonLines(path.join(paths.STATE_DIR, 'dirs.jsonl'), directoryRecords);
@@ -274,8 +289,11 @@ export async function runBuild(projectRoot?: string) {
     for(const fileRecord of fileRecords) {
         await writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
     }
+    const writeElapsed = performance.now() - writeStart;
+    console.log(`wrote state (${writeElapsed.toFixed(1)} ms)`);
 
-    printBuildSummary(buildInfo, repoSynopsis);
+    const totalElapsed = performance.now() - overallStart;
+    printBuildSummary(buildInfo, repoSynopsis, totalElapsed);
     return {buildInfo, repoSynopsis, directoryRecords, fileRecords, chunkRecords};
 }
 
@@ -378,8 +396,11 @@ async function processDiscoveredFileForBuild(opts: {
     return {fileRecord, chunkRecords, deltas};
 }
 
-function printBuildSummary(buildInfo: any, repoSynopsis: any) {
+function printBuildSummary(buildInfo: any, repoSynopsis: any, totalMs?: number) {
     console.log('PROJECT MAP BUILD COMPLETE');
+    if (typeof totalMs === 'number') {
+        console.log(`total_time: ${(totalMs/1000).toFixed(2)}s (${totalMs.toFixed(1)} ms)`);
+    }
     console.log(`version: ${buildInfo.version}`);
     console.log(`project_root: ${buildInfo.project_root}`);
     console.log(`built_at: ${buildInfo.build_finished_at}`);
