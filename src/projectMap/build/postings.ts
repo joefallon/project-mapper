@@ -1,5 +1,5 @@
 import { PostingsAccumulator } from '../types';
-import { countTerms, tokenizeText, bucketForTerm } from '../../utils';
+import { countTokenizedTerms, bucketForTerm } from '../../utils';
 import { writeJson } from '../io';
 import path from 'path';
 
@@ -8,7 +8,7 @@ export function createPostingsAccumulator(): PostingsAccumulator {
 }
 
 export function addChunkToPostings(postings: PostingsAccumulator, chunkRecord: any) {
-    const fullCounts = countTerms(tokenizeText(chunkRecord.text));
+    const fullCounts = countTokenizedTerms(chunkRecord.text);
 
     for(const [term, tf] of fullCounts.entries()) {
         const bucket = bucketForTerm(term);

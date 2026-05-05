@@ -9,6 +9,7 @@ import {
     isUsefulTerm,
     tokenizeText,
     toPosixPath,
+    countTokenizedTerms,
     countTerms,
     topTermsFromCounts,
     buildPreviewFromLines,
@@ -26,6 +27,30 @@ describe('utils', () => {
         // truncate should return empty string for empty/whitespace-only input
         expect(truncate('', 10)).toBe('');
         expect(truncate('   ', 10)).toBe('');
+    });
+
+    it('countTokenizedTerms produces same counts as countTerms(tokenizeText(x))', () => {
+        const samples = [
+            '',
+            'SalesOrderView get_sales-order rate XMLHTTP 2023 a b 1234',
+            'SalesOrderView',
+            'XMLHttpRequest',
+            'XMLHTTP',
+            'get_sales-order',
+            'foo bar 1234',
+            'foo/bar_baz-qux',
+            'foo--bar__baz',
+        ];
+
+        for (const s of samples) {
+            const fromTokens = countTerms(tokenizeText(s));
+            const direct = countTokenizedTerms(s);
+            // compare maps: same size and same entries
+            expect(direct.size).toBe(fromTokens.size);
+            for (const [k, v] of fromTokens.entries()) {
+                expect(direct.get(k)).toBe(v);
+            }
+        }
     });
 
     it('toPosixPath converts backslashes to forward slashes', () => {

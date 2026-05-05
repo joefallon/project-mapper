@@ -1,8 +1,7 @@
 import {
     buildPreviewFromLines,
     normalizeWhitespace,
-    tokenizeText,
-    countTerms,
+    countTokenizedTerms,
     topTermsFromCounts,
     extractQuotedStrings
 } from './utils';
@@ -63,8 +62,7 @@ export function buildChunkRecord({
     const text = slice.join('\n');
     const preview = buildPreviewFromLines(slice);
     const normalizedPreview = normalizeWhitespace(preview);
-    const terms = tokenizeText(text);
-    const termCounts = countTerms(terms);
+    const termCounts = countTokenizedTerms(text);
     const topTerms = topTermsFromCounts(termCounts);
     const identifiers = extractIdentifiers(text);
     const keyLikeLines = extractKeyLikeLines(slice);

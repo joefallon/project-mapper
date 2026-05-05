@@ -204,6 +204,21 @@ export function countTerms(terms: string[]): Map<string, number> {
 }
 
 /**
+ * Count terms emitted by the tokenization logic directly from text without
+ * materializing the full token array. This mirrors the exact emission order
+ * and duplicate semantics of `tokenizeText` but updates a Map instead of
+ * allocating an array of tokens. The result should be identical to
+ * `countTerms(tokenizeText(text))` for all inputs.
+ */
+export function countTokenizedTerms(text: string): Map<string, number> {
+    const counts = new Map<string, number>();
+    forEachTokenizedTerm(text, (term) => {
+        counts.set(term, (counts.get(term) ?? 0) + 1);
+    });
+    return counts;
+}
+
+/**
  * Return the top-N terms and counts from a Map of term counts.
  *
  * Ordering: primary by descending count, secondary by lexicographic term.
@@ -322,13 +337,24 @@ export function bucketForTerm(term: string): string {
  * Returns: string[] - array of normalized useful tokens.
  */
 export function tokenizeText(text: string): string[] {
-    const rawTokens = String(text ?? '').match(TOKEN_RE) ?? [];
     const output: string[] = [];
+    forEachTokenizedTerm(text, (term) => output.push(term));
+    return output;
+}
 
-    for(const rawToken of rawTokens) {
+/**
+ * Internal shared token-emission helper. Calls `emit(term)` for every token
+ * that the public `tokenizeText()` would produce, in the same order and with
+ * the same duplicates. Keep this internal (non-exported) to avoid widening the
+ * public API surface.
+ */
+function forEachTokenizedTerm(text: string, emit: (term: string) => void): void {
+    const rawTokens = String(text ?? '').match(TOKEN_RE) ?? [];
+
+    for (const rawToken of rawTokens) {
         const base = normalizeTerm(rawToken);
-        if(isUsefulTerm(base)) {
-            output.push(base);
+        if (isUsefulTerm(base)) {
+            emit(base);
         }
 
         for (const separatorPart of rawToken.split(SEP_RE)) {
@@ -339,20 +365,18 @@ export function tokenizeText(text: string): string[] {
 
             const normalizedPart = normalizeTerm(separatorPart);
             if (isUsefulTerm(normalizedPart)) {
-                output.push(normalizedPart);
+                emit(normalizedPart);
             }
 
             const camelParts = splitCamelCase(separatorPart);
             for (const camelPart of camelParts) {
                 const normalizedCamelPart = normalizeTerm(camelPart);
                 if (isUsefulTerm(normalizedCamelPart)) {
-                    output.push(normalizedCamelPart);
+                    emit(normalizedCamelPart);
                 }
             }
         }
     }
-
-    return output;
 }
 
 
