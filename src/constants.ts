@@ -5,9 +5,11 @@
  */
 export const IGNORED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
     '.git',
+    '.github',
     '.hg',
     '.svn',
     '.idea',
+    '.vs',
     '.vscode',
     '.next',
     '.nuxt',

@@ -1,10 +1,12 @@
 .ai/out/
 .ai/scale/
+.ai/concatenated.txt
 .idea/
 coverage/
 dist/
 node_modules/
 
+diff.diff
 .DS_Store
 .env
 

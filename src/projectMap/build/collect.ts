@@ -89,70 +89,61 @@ export async function runBuild(projectRoot?: string) {
         return `c${String(chunkCounter).padStart(7, '0')}`;
     };
 
+    // Process files serially but with local (per-file) chunk ids. We'll finalize global
+    // chunk ids in a separate ordered step below to make per-file processing safe for
+    // future concurrency.
+    const processedFiles: Array<{
+        fileRecord: any;
+        chunkRecords: any[];
+        deltas: { indexedTextFiles: number; skippedFiles: number; binaryFiles: number; generatedFiles: number };
+    }> = [];
+
     for(const discoveredFile of discoveredFiles) {
-        const stats = await fs.stat(discoveredFile.absolute_path);
-        const extension = path.extname(discoveredFile.relative_path).toLowerCase();
-        const textFile = await isTextFile(discoveredFile.absolute_path, extension);
-        const fileClass = classifyFile(discoveredFile.relative_path, extension, textFile);
         const fileId = nextFileId();
-
-        if(!textFile) {
-            binaryFiles += 1;
-            skippedFiles += 1;
-            fileRecords.push(buildSkippedFileRecord({
-                fileId,
-                relativeFilePath: discoveredFile.relative_path,
-                extension,
-                sizeBytes:        stats.size,
-                mtimeMs:          stats.mtimeMs,
-                fileClass,
-                skipReason:       'binary-or-asset',
-            }));
-            continue;
-        }
-
-        if(fileClass === 'generated') {
-            generatedFiles += 1;
-            skippedFiles += 1;
-            fileRecords.push(buildSkippedFileRecord({
-                fileId,
-                relativeFilePath: discoveredFile.relative_path,
-                extension,
-                sizeBytes:        stats.size,
-                mtimeMs:          stats.mtimeMs,
-                fileClass,
-                skipReason:       'generated-noise',
-            }));
-            continue;
-        }
-
-        const text = await fs.readFile(discoveredFile.absolute_path, 'utf8');
-        const {lines, chunks} = chunkTextFile({
+        const processed = await processDiscoveredFileForBuild({
+            discoveredFile,
             fileId,
-            relativeFilePath: discoveredFile.relative_path,
-            text,
             knownBasenamesSet,
-            chunkIdGenerator: nextChunkId,
         });
 
-        for(const chunk of chunks) {
-            addChunkToPostings(postings, chunk);
+        processedFiles.push(processed);
+
+        // Update counters
+        indexedTextFiles += processed.deltas.indexedTextFiles;
+        skippedFiles += processed.deltas.skippedFiles;
+        binaryFiles += processed.deltas.binaryFiles;
+        generatedFiles += processed.deltas.generatedFiles;
+    }
+
+    // Finalize chunk ids in strict discovery order. This is the only place that uses the
+    // global nextChunkId generator; it ensures deterministic global chunk ids while allowing
+    // per-file processing to have used private/local temporary ids.
+    for(const processed of processedFiles) {
+        // Map local -> final ids for this file
+        const localToFinal: Record<string, string> = {};
+        for(const chunk of processed.chunkRecords) {
+            const finalId = nextChunkId();
+            // record mapping and mutate the chunk record in-place
+            localToFinal[chunk.chunk_id] = finalId;
+            chunk.chunk_id = finalId;
+            // push finalized chunk into global chunk list
             chunkRecords.push(chunk);
         }
 
-        fileRecords.push(buildIndexedFileRecord({
-            fileId,
-            relativeFilePath: discoveredFile.relative_path,
-            extension,
-            sizeBytes:        stats.size,
-            mtimeMs:          stats.mtimeMs,
-            fileClass,
-            text,
-            lines,
-            chunks,
-        }));
+        // Update fileRecord.chunk_ids to final ids (preserve order)
+        if(processed.fileRecord && Array.isArray(processed.fileRecord.chunk_ids)) {
+            processed.fileRecord = {
+                ...processed.fileRecord,
+                chunk_ids: processed.fileRecord.chunk_ids.map((id: string) => localToFinal[id] ?? id),
+            };
+        }
 
-        indexedTextFiles += 1;
+        // Now that chunks are finalized for this file, add them to postings and add fileRecord
+        for(const chunk of processed.chunkRecords) {
+            addChunkToPostings(postings, chunk);
+        }
+
+        fileRecords.push(processed.fileRecord);
     }
 
     const directoryRecords = buildDirectoryRecords(fileRecords);
@@ -233,6 +224,105 @@ export async function runBuild(projectRoot?: string) {
 
     printBuildSummary(buildInfo, repoSynopsis);
     return {buildInfo, repoSynopsis, directoryRecords, fileRecords, chunkRecords};
+}
+
+/**
+ * Result of processing a single discovered file during build.
+ */
+interface ProcessedBuildFile {
+    fileRecord: any;
+    chunkRecords: any[];
+    deltas: {
+        indexedTextFiles: number;
+        skippedFiles: number;
+        binaryFiles: number;
+        generatedFiles: number;
+    };
+}
+
+async function processDiscoveredFileForBuild(opts: {
+    discoveredFile: { absolute_path: string; relative_path: string };
+    fileId: string;
+    knownBasenamesSet: Set<string>;
+}): Promise<ProcessedBuildFile> {
+    const {discoveredFile, fileId, knownBasenamesSet} = opts;
+    const stats = await fs.stat(discoveredFile.absolute_path);
+    const extension = path.extname(discoveredFile.relative_path).toLowerCase();
+    const textFile = await isTextFile(discoveredFile.absolute_path, extension);
+    const fileClass = classifyFile(discoveredFile.relative_path, extension, textFile);
+
+    // default empty results
+    const deltas = {indexedTextFiles: 0, skippedFiles: 0, binaryFiles: 0, generatedFiles: 0};
+    let fileRecord: any = null;
+    const chunkRecords: any[] = [];
+
+    if(!textFile) {
+        deltas.binaryFiles = 1;
+        deltas.skippedFiles = 1;
+        fileRecord = buildSkippedFileRecord({
+            fileId,
+            relativeFilePath: discoveredFile.relative_path,
+            extension,
+            sizeBytes:        stats.size,
+            mtimeMs:          stats.mtimeMs,
+            fileClass,
+            skipReason:       'binary-or-asset',
+        });
+        return {fileRecord, chunkRecords, deltas};
+    }
+
+    if(fileClass === 'generated') {
+        deltas.generatedFiles = 1;
+        deltas.skippedFiles = 1;
+        fileRecord = buildSkippedFileRecord({
+            fileId,
+            relativeFilePath: discoveredFile.relative_path,
+            extension,
+            sizeBytes:        stats.size,
+            mtimeMs:          stats.mtimeMs,
+            fileClass,
+            skipReason:       'generated-noise',
+        });
+        return {fileRecord, chunkRecords, deltas};
+    }
+
+    const text = await fs.readFile(discoveredFile.absolute_path, 'utf8');
+    // Use a local (per-file) temporary chunk id generator so per-file processing
+    // doesn't rely on any shared global counter. These local ids will be
+    // replaced later in runBuild(). The prefix 'local-c' is intentionally
+    // distinct so tests can assert final ids don't contain it.
+    let localChunkCounter = 0;
+    const localChunkId = () => {
+        localChunkCounter += 1;
+        return `local-c${String(localChunkCounter).padStart(6, '0')}`;
+    };
+
+    const {lines, chunks} = chunkTextFile({
+        fileId,
+        relativeFilePath: discoveredFile.relative_path,
+        text,
+        knownBasenamesSet,
+        chunkIdGenerator: localChunkId,
+    });
+
+    for(const chunk of chunks) {
+        chunkRecords.push(chunk);
+    }
+
+    fileRecord = buildIndexedFileRecord({
+        fileId,
+        relativeFilePath: discoveredFile.relative_path,
+        extension,
+        sizeBytes:        stats.size,
+        mtimeMs:          stats.mtimeMs,
+        fileClass,
+        text,
+        lines,
+        chunks,
+    });
+
+    deltas.indexedTextFiles = 1;
+    return {fileRecord, chunkRecords, deltas};
 }
 
 function printBuildSummary(buildInfo: any, repoSynopsis: any) {
