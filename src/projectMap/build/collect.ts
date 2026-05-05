@@ -166,10 +166,16 @@ export async function runBuild(projectRoot?: string) {
     };
 
     console.log(`processing files: ${discoveredFiles.length} (concurrency=${CONCURRENCY})...`);
-    const processingStart = performance.now();
+
+    // 1) Per-file work: mapWithConcurrency over discovered files
+    const fileProcessingStart = performance.now();
     const results = await mapWithConcurrency(discoveredFiles, worker, CONCURRENCY);
     for (const r of results) processedFiles.push(r);
+    const fileProcessingElapsed = performance.now() - fileProcessingStart;
+    console.log(`file processing work: ${fileProcessingElapsed.toFixed(1)} ms`);
 
+    // 2) Ordered merge/finalization: deterministic aggregation, final chunk id assignment and postings
+    const mergeStart = performance.now();
     // Aggregate counters deterministically in discovered-file order
     for (const processed of processedFiles) {
         indexedTextFiles += processed.deltas.indexedTextFiles;
@@ -208,10 +214,11 @@ export async function runBuild(projectRoot?: string) {
 
         fileRecords.push(processed.fileRecord);
     }
+    const mergeElapsed = performance.now() - mergeStart;
+    console.log(`merge/postings work: ${mergeElapsed.toFixed(1)} ms`);
 
-    const processingElapsed = performance.now() - processingStart;
-    console.log(`processed files: indexed=${indexedTextFiles} skipped=${skippedFiles} chunks=${chunkRecords.length} (${processingElapsed.toFixed(1)} ms)`);
-
+    // 3) Summary construction: directory records, extension/class counts, repo synopsis and build info
+    const summaryStart = performance.now();
     const directoryRecords = buildDirectoryRecords(fileRecords);
 
     const extensionCounts: Record<string, number> = {};
@@ -268,19 +275,33 @@ export async function runBuild(projectRoot?: string) {
         total_chunks:       chunkRecords.length,
     };
 
-    // Persist core state
+    const summaryElapsed = performance.now() - summaryStart;
+    console.log(`summary work: ${summaryElapsed.toFixed(1)} ms`);
+
+    const processingElapsed = fileProcessingElapsed + mergeElapsed + summaryElapsed;
+    console.log(`processed files: indexed=${indexedTextFiles} skipped=${skippedFiles} chunks=${chunkRecords.length} (${processingElapsed.toFixed(1)} ms)`);
+
+    // Persist core state with subphase timings
     console.log('writing state...');
     const writeStart = performance.now();
+
+    const coreStart = performance.now();
     await writeJson(path.join(paths.STATE_DIR, 'build.json'), buildInfo);
     await writeJson(path.join(paths.STATE_DIR, 'repo.json'), repoSynopsis);
     await writeJsonLines(path.join(paths.STATE_DIR, 'dirs.jsonl'), directoryRecords);
     await writeJsonLines(path.join(paths.STATE_DIR, 'files.jsonl'), fileRecords);
     await writeJsonLines(path.join(paths.STATE_DIR, 'chunks.jsonl'), chunkRecords);
+    const coreElapsed = performance.now() - coreStart;
+    console.log(`core state write: ${coreElapsed.toFixed(1)} ms`);
 
-    // Persist postings and synopses
+    // Persist postings
+    const postingsStart = performance.now();
     await persistPostings(postings, paths.POSTINGS_DIR);
+    const postingsElapsed = performance.now() - postingsStart;
+    console.log(`postings write: ${postingsElapsed.toFixed(1)} ms`);
 
     // repo-level and per-dir/file synopses
+    const synopsisStart = performance.now();
     await writeJson(path.join(paths.SYNOPSES_DIR, 'repo.json'), repoSynopsis);
     // Write per-directory synopses with bounded concurrency — these writes are
     // independent and safe to parallelize. Use the local mapWithConcurrency
@@ -293,6 +314,9 @@ export async function runBuild(projectRoot?: string) {
     await mapWithConcurrency(fileRecords, async (fileRecord) => {
         return writeJson(path.join(paths.SYNOPSES_FILES_DIR, `${fileRecord.file_id}.json`), fileRecord);
     }, CONCURRENCY);
+    const synopsisElapsed = performance.now() - synopsisStart;
+    console.log(`synopsis write: ${synopsisElapsed.toFixed(1)} ms`);
+
     const writeElapsed = performance.now() - writeStart;
     console.log(`wrote state (${writeElapsed.toFixed(1)} ms)`);
 
