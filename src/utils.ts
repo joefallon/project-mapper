@@ -17,6 +17,17 @@ export function hasText(value: unknown): boolean {
 
 // ...existing code...
 
+// Module-level compiled regexes and small caches used on the chunking hot path.
+const TOKEN_RE = /[A-Za-z0-9][A-Za-z0-9._:/-]*/g;
+const SEP_RE = /[._:/-]+/;
+const TRIM_PUNCT_RE = /^[-_.:\/]+|[-_.:\/]+$/g;
+
+// Simple bounded cache for normalizeTerm to avoid unbounded memory growth.
+const NORMALIZE_TERM_CACHE_LIMIT = 50000;
+const normalizeTermCache = new Map<string, string>();
+// minimal stopword set allocated once
+const STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'to']);
+
 /**
  * Truncates a string to a maximum length and appends an ellipsis when truncated.
  *
@@ -139,7 +150,16 @@ export function splitCamelCase(token: string): string[] {
  * Returns: string - normalized term (may be empty).
  */
 export function normalizeTerm(term: string): string {
-    return String(term ?? '').trim().toLowerCase().replace(/^[-_.:\/]+|[-_.:\/]+$/g, '');
+    const key = String(term ?? '');
+    const cached = normalizeTermCache.get(key);
+    if (cached !== undefined) return cached;
+    const out = key.trim().toLowerCase().replace(TRIM_PUNCT_RE, '');
+    // If cache reached the configured limit, clear it to keep memory bounded.
+    if (normalizeTermCache.size >= NORMALIZE_TERM_CACHE_LIMIT) {
+        normalizeTermCache.clear();
+    }
+    normalizeTermCache.set(key, out);
+    return out;
 }
 
 /**
@@ -159,8 +179,6 @@ export function isUsefulTerm(term: string): boolean {
     if(!term || term.length < 2) {
         return false;
     }
-    // minimal stopword set for tests
-    const STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'to']);
     if(STOPWORDS.has(term)) {
         return false;
     }
@@ -305,7 +323,7 @@ export function bucketForTerm(term: string): string {
  * Returns: string[] - array of normalized useful tokens.
  */
 export function tokenizeText(text: string): string[] {
-    const rawTokens = String(text ?? '').match(/[A-Za-z0-9][A-Za-z0-9._:/-]*/g) ?? [];
+    const rawTokens = String(text ?? '').match(TOKEN_RE) ?? [];
     const output: string[] = [];
 
     for(const rawToken of rawTokens) {
@@ -314,7 +332,7 @@ export function tokenizeText(text: string): string[] {
             output.push(base);
         }
 
-        const separatorParts = rawToken.split(/[._:/-]+/).filter(Boolean);
+        const separatorParts = rawToken.split(SEP_RE).filter(Boolean);
         for(const separatorPart of separatorParts) {
             const normalizedPart = normalizeTerm(separatorPart);
             if(isUsefulTerm(normalizedPart)) {
