@@ -63,11 +63,15 @@ export async function runBuild(projectRoot?: string) {
     console.log('PROJECT MAP BUILD STARTED');
     console.log(`project_root: ${paths.PROJECT_ROOT}`);
     // ensure .ai/scale exists
+    console.log('preparing state...');
+    const setupStart = performance.now();
     await ensureScaleDirectory(paths.AI_DIR);
 
     // Per the operating model: remove any existing state and create fresh dirs
     await removeDirectoryIfPresent(paths.STATE_DIR);
     await ensureStateDirectories(paths);
+    const setupElapsed = performance.now() - setupStart;
+    console.log(`prepared state (${setupElapsed.toFixed(1)} ms)`);
 
     const buildStartedAt = new Date().toISOString();
     console.log('discovering files...');
@@ -146,6 +150,7 @@ export async function runBuild(projectRoot?: string) {
         fileRecord: any;
         chunkRecords: any[];
         deltas: { indexedTextFiles: number; skippedFiles: number; binaryFiles: number; generatedFiles: number };
+        timings: { metadataMs: number; readMs: number; chunkMs: number; recordMs: number };
     }> = [];
 
     // Assign deterministic file ids in discovery order before doing any async work
@@ -173,6 +178,18 @@ export async function runBuild(projectRoot?: string) {
     for (const r of results) processedFiles.push(r);
     const fileProcessingElapsed = performance.now() - fileProcessingStart;
     console.log(`file processing work: ${fileProcessingElapsed.toFixed(1)} ms`);
+
+    // Aggregate worker timings from per-file results (console-only)
+    const workerTotals = processedFiles.reduce((acc, pf) => {
+        const t = pf.timings || {metadataMs: 0, readMs: 0, chunkMs: 0, recordMs: 0};
+        acc.metadataMs += t.metadataMs;
+        acc.readMs += t.readMs;
+        acc.chunkMs += t.chunkMs;
+        acc.recordMs += t.recordMs;
+        return acc;
+    }, {metadataMs: 0, readMs: 0, chunkMs: 0, recordMs: 0});
+
+    console.log(`file worker totals: metadata=${workerTotals.metadataMs.toFixed(1)} ms read=${workerTotals.readMs.toFixed(1)} ms chunk=${workerTotals.chunkMs.toFixed(1)} ms record=${workerTotals.recordMs.toFixed(1)} ms`);
 
     // 2) Ordered merge/finalization: deterministic aggregation, final chunk id assignment and postings
     const mergeStart = performance.now();
@@ -351,6 +368,13 @@ interface ProcessedBuildFile {
         binaryFiles: number;
         generatedFiles: number;
     };
+    // Console-only aggregated timing for per-file worker phases. Not persisted.
+    timings: {
+        metadataMs: number;
+        readMs: number;
+        chunkMs: number;
+        recordMs: number;
+    };
 }
 
 async function processDiscoveredFileForBuild(opts: {
@@ -359,19 +383,25 @@ async function processDiscoveredFileForBuild(opts: {
     knownBasenamesSet: Set<string>;
 }): Promise<ProcessedBuildFile> {
     const {discoveredFile, fileId, knownBasenamesSet} = opts;
+    const metaStart = performance.now();
     const stats = await fs.stat(discoveredFile.absolute_path);
     const extension = path.extname(discoveredFile.relative_path).toLowerCase();
     const textFile = await isTextFile(discoveredFile.absolute_path, extension);
     const fileClass = classifyFile(discoveredFile.relative_path, extension, textFile);
+    const metadataMs = performance.now() - metaStart;
 
     // default empty results
     const deltas = {indexedTextFiles: 0, skippedFiles: 0, binaryFiles: 0, generatedFiles: 0};
     let fileRecord: any = null;
     const chunkRecords: any[] = [];
+    let readMs = 0;
+    let chunkMs = 0;
+    let recordMs = 0;
 
     if(!textFile) {
         deltas.binaryFiles = 1;
         deltas.skippedFiles = 1;
+        const recStart = performance.now();
         fileRecord = buildSkippedFileRecord({
             fileId,
             relativeFilePath: discoveredFile.relative_path,
@@ -381,12 +411,14 @@ async function processDiscoveredFileForBuild(opts: {
             fileClass,
             skipReason:       'binary-or-asset',
         });
-        return {fileRecord, chunkRecords, deltas};
+        recordMs = performance.now() - recStart;
+        return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
     }
 
     if(fileClass === 'generated') {
         deltas.generatedFiles = 1;
         deltas.skippedFiles = 1;
+        const recStart = performance.now();
         fileRecord = buildSkippedFileRecord({
             fileId,
             relativeFilePath: discoveredFile.relative_path,
@@ -396,10 +428,13 @@ async function processDiscoveredFileForBuild(opts: {
             fileClass,
             skipReason:       'generated-noise',
         });
-        return {fileRecord, chunkRecords, deltas};
+        recordMs = performance.now() - recStart;
+        return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
     }
 
+    const readStart = performance.now();
     const text = await fs.readFile(discoveredFile.absolute_path, 'utf8');
+    readMs = performance.now() - readStart;
     // Use a local (per-file) temporary chunk id generator so per-file processing
     // doesn't rely on any shared global counter. These local ids will be
     // replaced later in runBuild(). The prefix 'local-c' is intentionally
@@ -410,6 +445,7 @@ async function processDiscoveredFileForBuild(opts: {
         return `local-c${String(localChunkCounter).padStart(6, '0')}`;
     };
 
+    const chunkStart = performance.now();
     const {lines, chunks} = chunkTextFile({
         fileId,
         relativeFilePath: discoveredFile.relative_path,
@@ -417,11 +453,13 @@ async function processDiscoveredFileForBuild(opts: {
         knownBasenamesSet,
         chunkIdGenerator: localChunkId,
     });
+    chunkMs = performance.now() - chunkStart;
 
     for(const chunk of chunks) {
         chunkRecords.push(chunk);
     }
 
+    const recStart = performance.now();
     fileRecord = buildIndexedFileRecord({
         fileId,
         relativeFilePath: discoveredFile.relative_path,
@@ -433,9 +471,10 @@ async function processDiscoveredFileForBuild(opts: {
         lines,
         chunks,
     });
+    recordMs = performance.now() - recStart;
 
     deltas.indexedTextFiles = 1;
-    return {fileRecord, chunkRecords, deltas};
+    return {fileRecord, chunkRecords, deltas, timings: {metadataMs, readMs, chunkMs, recordMs}};
 }
 
 function printBuildSummary(buildInfo: any, repoSynopsis: any, totalMs?: number) {
