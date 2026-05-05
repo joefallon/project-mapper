@@ -14,15 +14,15 @@
         "build": "tsc",
         "bundle": "node scripts/bundle.cjs",
         "dist": "npm run build && npm run bundle",
-        "coverage": "vitest --coverage",
         "test": "vitest",
+        "test:coverage": "vitest --coverage",
         "test:watch": "vitest --watch",
         "start": "node dist/cli.js"
     },
     "devDependencies": {
         "@types/node": "^20.4.0",
         "@vitest/coverage-v8": "^4.1.4",
-        "esbuild": "^0.18.20",
+        "esbuild": "^0.28.0",
         "ts-node": "^10.9.1",
         "typescript": "^5.5.0",
         "vitest": "^4.1.4"

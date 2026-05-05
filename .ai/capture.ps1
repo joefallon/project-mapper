@@ -21,26 +21,111 @@ function Show-Usage {
     Write-Host "  .ai\capture.ps1 -n gold_csv_disable_logic -- rg -B 2 -A 10 'csv' application\controllers\LeadSourceReportController.php"
     Write-Host '  .ai\capture.ps1 -- git diff -- application\controllers\LeadSourceReportController.php'
     Write-Host '  .ai\capture.ps1 -n spooler_status -- Get-Service Spooler'
+    Write-Host ''
+    Write-Host 'Multi-line PowerShell example:'
+    Write-Host "  .ai\capture.ps1 -n files -- powershell -NoProfile -Command @'"
+    Write-Host '  Get-Content .\some-file.txt'
+    Write-Host '  ""'
+    Write-Host '  Get-ChildItem . -File'
+    Write-Host "'@"
 }
 
 function Format-CommandArg {
     param([string]$Arg)
 
     if ($null -eq $Arg) {
-        return '""'
+        return "''"
     }
 
     if ($Arg -match '^[A-Za-z0-9._/\\:\-]+$') {
         return $Arg
     }
 
-    return '"' + ($Arg -replace '"', '\"') + '"'
+    return "'" + ($Arg -replace "'", "''") + "'"
 }
 
 function Write-CaptureText {
     param([string[]]$Lines)
 
     $Lines | Tee-Object -FilePath $script:OutPath -Append
+}
+
+function Test-IsPowerShellExecutable {
+    param([string]$CommandName)
+
+    if ([string]::IsNullOrWhiteSpace($CommandName)) {
+        return $false
+    }
+
+    $leaf = [System.IO.Path]::GetFileName($CommandName)
+
+    if ([string]::IsNullOrWhiteSpace($leaf)) {
+        $leaf = $CommandName
+    }
+
+    $leaf = $leaf.ToLowerInvariant()
+
+    return $leaf -in @(
+        'powershell',
+        'powershell.exe',
+        'pwsh',
+        'pwsh.exe'
+    )
+}
+
+function Convert-PowerShellCommandToEncodedCommand {
+    param(
+        [string]$CommandName,
+        [string[]]$InputArgs
+    )
+
+    if (-not (Test-IsPowerShellExecutable -CommandName $CommandName)) {
+        return $InputArgs
+    }
+
+    if (-not $InputArgs -or $InputArgs.Length -eq 0) {
+        return $InputArgs
+    }
+
+    for ($i = 0; $i -lt $InputArgs.Length; $i++) {
+        $arg = $InputArgs[$i]
+
+        if ($null -eq $arg) {
+            continue
+        }
+
+        $normalizedArg = $arg.ToLowerInvariant()
+
+        if ($normalizedArg -ne '-command' -and $normalizedArg -ne '-c') {
+            continue
+        }
+
+        if (($i + 1) -ge $InputArgs.Length) {
+            return $InputArgs
+        }
+
+        $commandText = $InputArgs[$i + 1]
+        $encodedCommand = [Convert]::ToBase64String(
+            [System.Text.Encoding]::Unicode.GetBytes($commandText)
+        )
+
+        $rewrittenArgs = @()
+
+        if ($i -gt 0) {
+            $rewrittenArgs += $InputArgs[0..($i - 1)]
+        }
+
+        $rewrittenArgs += '-EncodedCommand'
+        $rewrittenArgs += $encodedCommand
+
+        if (($i + 2) -lt $InputArgs.Length) {
+            $rewrittenArgs += $InputArgs[($i + 2)..($InputArgs.Length - 1)]
+        }
+
+        return [string[]]$rewrittenArgs
+    }
+
+    return $InputArgs
 }
 
 if ($Help) {
@@ -74,6 +159,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 $safeName = ($Name -replace '[ /:]', '-' -replace '[^A-Za-z0-9._-]', '')
+
 if ([string]::IsNullOrWhiteSpace($safeName)) {
     $safeName = 'capture'
 }
@@ -108,7 +194,11 @@ try {
         $commandArgs = $Command[1..($Command.Length - 1)]
     }
 
-    & $commandName @commandArgs 2>&1 | Tee-Object -FilePath $script:OutPath -Append
+    $effectiveCommandArgs = Convert-PowerShellCommandToEncodedCommand `
+        -CommandName $commandName `
+        -InputArgs $commandArgs
+
+    & $commandName @effectiveCommandArgs 2>&1 | Tee-Object -FilePath $script:OutPath -Append
 
     if ($null -ne $LASTEXITCODE) {
         $status = [int]$LASTEXITCODE
